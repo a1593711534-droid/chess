@@ -159,9 +159,10 @@ with sync_playwright() as pw:
   page.locator('#create-variation').click()
   page.clock.fast_forward(181000)
   page.clock.run_for(300)
+  assert page.locator('#bottom-clock').inner_text()=='STUDY'
+  page.locator('#finish-variation').click()
   during=page.locator('#bottom-clock').inner_text()
   assert during==before,('variation consumed game time',before,during)
-  page.locator('#finish-variation').click()
   page.clock.fast_forward(2500)
   page.clock.run_for(300)
   after=page.locator('#bottom-clock').inner_text()

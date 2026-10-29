@@ -59,6 +59,12 @@
 
 [查看部署紀錄](../../actions/workflows/deploy-pages.yml) · [Pages 設定](../../settings/pages)
 
+## 離線快取與更新
+
+- 第一次連線會安裝 Service Worker，預先快取棋盤、CSS、JS、棋子與內建教學資料；安裝完成後，即使沒有網路，也可以重新開啟網頁使用本機雙人對弈與已快取功能。
+- Stockfish 19 的約 99 MB WASM **只在真正需要 AI 或分析時下載**，成功下載後會嘗試快取，以供離線重用。瀏覽器儲存空間不足或清除網站資料時，快取可能遺失。
+- 後續版本優先使用網路更新靜態資源；離線時使用已快取版本。不同瀏覽器的離線儲存限制可能不同。
+
 ## 本機測試
 
 `npm test`（需要 Node.js，但不需要 `npm install`）。如需在本機對弈，請先將與工作流程 SHA-256 相符的 Stockfish WASM 放到 `vendor/stockfish-19-single.wasm`，再執行 `py -3 launcher/serve.py`（若保留本機啟動器）或使用任意靜態 HTTP 伺服器。

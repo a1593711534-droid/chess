@@ -205,7 +205,7 @@ function loadManual(){
     try{
       // Validate the entire save before touching the active match.
       const next=new ChessSession(manual.game.config);next.restore(manual.game,{resumeClock:false,strictStudy:true});
-      cancelSearch();session=next;
+      cancelSearch();engine?.newGame();session=next;
       sessionActive=true;menuPauseSide=manual.game.clock?.active||null;
       $('position-note').dataset.ply='';usingFallback=false;
       prefs={...prefs,...manual.game.config,side:prefs.side==='random'?'random':manual.game.config.side};renderSettings();
@@ -224,7 +224,7 @@ function cancelSearch({preserveAnalysis=false}={}){
 }
 function initialGame(){
   prefs={...readSettings()};savePrefs(prefs);
-  cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=new ChessSession(prefs);sessionActive=true;
+  cancelSearch();engine?.newGame();exitTraining(false);variation=null;clockBeforeVariation=null;session=new ChessSession(prefs);sessionActive=true;
   $('position-note').dataset.ply='';flipped=session.config.mode==='ai'&&session.config.side==='b';
   menuPauseSide=null;lastHint=null;analysisInfo=null;analysisFen=null;
   if(mobileAnnotating){mobileAnnotating=false;board.setAnnotationMode(false);$('mobile-annotate-btn').setAttribute('aria-pressed','false');$('mobile-annotate-btn').textContent='標記';}
@@ -357,12 +357,21 @@ async function runBot(){
   thinking=true;analysisLines=new Map();analysisInfo=null;analysisFen=null;render();
   let uci=null;
   try{
-    uci=await ensureEngine().search(fen,{skill:setting.skill,...budget,onInfo:info=>{
+    uci=await ensureEngine().search(fen,{skill:setting.skill,
+      getSearchOptions:()=>selectAiSearch(session.config,session.clock),onInfo:info=>{
       if(botSequence!==token||session.game.fen()!==fen)return;
       analysisInfo=info;analysisFen=fen;analysisLines.set(info.multiPV||1,info);renderAnalysis();
     }});
   }catch(error){engineError=error;}
   if(token!==botSequence||session.game.fen()!==fen)return;
+  // The clock can expire while the Worker is starting; never replace a timed-out
+  // Stockfish search with a fallback move after flag fall.
+  if(session.clock.snapshot().timeout){
+    thinking=false;
+    const outcome=session.status();
+    if(outcome?.kind==='timeout'&&!session.result){session.result=outcome;save();toast(gameOutcomeText(outcome),'info');}
+    render();return;
+  }
   if(!uci){usingFallback=true;uci=fallbackMove(fen,session.config.level);}
   else usingFallback=false;
   thinking=false;
@@ -578,7 +587,7 @@ function importPgn(){
       next.restore(data.game,{resumeClock:!menuVisible(),strictStudy:true});
       importedActiveSide=data.game.clock?.active||null;
     }else{next=new ChessSession({...prefs,mode:'local',time:'none'});next.importPgn(text);}
-    cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=next;
+    cancelSearch();engine?.newGame();exitTraining(false);variation=null;clockBeforeVariation=null;session=next;
     $('position-note').dataset.ply='';flipped=isBackup&&session.config.mode==='ai'&&session.config.side==='b';
     menuPauseSide=isBackup&&menuVisible()?importedActiveSide:null;
     usingFallback=false;lastHint=null;analysisInfo=null;analysisFen=null;

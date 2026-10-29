@@ -10,9 +10,9 @@ const boot=readFileSync(new URL('../src/ui/boot.js',import.meta.url),'utf8');
 test('experience styles override focus and readability and retain a versioned cache key',()=>{
   const all=[...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(x=>x[1]);
   assert.match(all.at(-1),/experience\.css\?v=20261030b/);
-  assert.ok(all.some(x=>/readability\.css\?v=2\.3\.3/.test(x)));
-  assert.match(boot,/APP_VERSION='2\.3\.3'/);
-  assert.match(html,/data-app-version="2\.3\.3"/);
+  assert.ok(all.some(x=>/readability\.css\?v=2\.3\.4/.test(x)));
+  assert.match(boot,/APP_VERSION='2\.3\.4'/);
+  assert.match(html,/data-app-version="2\.3\.4"/);
   assert.match(experience,/grid-template-columns:minmax\(286px,1fr\)/);
   assert.match(experience,/#main-menu-modal \.main-menu-card/);
 });

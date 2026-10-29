@@ -1,3 +1,12 @@
+## v2.3.4 · Chess-rule and study-data integrity (phase 1)
+
+- FIDE-style draw handling: three repetitions / 50 moves allow an explicit draw claim; five repetitions / 75 moves are automatic. A player whose flag falls draws when the opponent has no possible mating sequence.
+- New games now require confirmation before replacing a finished match or one containing moves, notes, marks or variations.
+- Undoing annotated moves warns first and removes annotations anchored to discarded positions. Export a full JSON study backup first if you want to retain those notes.
+- Retrying a variation save after browser-storage failure does not duplicate the branch.
+- Automatic and manual saves are validated before replacing the live game; malformed study origins and invalid clock data are rejected.
+- Expanded Node and Chromium regression coverage. The browser's clock still pauses while the main menu is open.
+
 ## v2.3.3 · Save recovery and engine cancellation improvements
 
 - Corrupt localStorage records are now distinguished from missing saves and the menu reports manual-save corruption.

@@ -59,6 +59,6 @@ test('active game configuration stays unchanged while the new-game menu is edita
   assert.match(app,/\$\('menu-start-shortcut'\)\.onclick=showNewGame/);
   assert.match(app,/menuVisible\(\)\|\|session\.done/);
   assert.match(app,/saveManualGame\(serializedForSave\(\)\)/);
-  assert.match(app,/session\.restore\(saved,\{resumeClock:false\}\)/);
-  assert.match(app,/next\.restore\(manual\.game,\{resumeClock:false\}\)/);
+  assert.match(app,/next\.restore\(saved,\{resumeClock:false,strictStudy:true\}\)/);
+  assert.match(app,/next\.restore\(manual\.game,\{resumeClock:false,strictStudy:true\}\)/);
 });

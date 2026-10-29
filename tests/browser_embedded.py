@@ -158,7 +158,7 @@ with sync_playwright() as pw:
   print('MISSING OPTIONAL CONTROL RECOVERED',flush=True)
   page.close()
   # Regression: an old HTML build must present a clear recovery screen.
-  mismatched=html.replace('data-app-version="2.3.3"','data-app-version="2.0.0"')
+  mismatched=html.replace('data-app-version="2.3.4"','data-app-version="2.0.0"')
   assert mismatched!=html
   page=browser.new_page()
   errors=[];page.on('pageerror',lambda exc:errors.append(str(exc)))
@@ -227,5 +227,50 @@ with sync_playwright() as pw:
   to_seconds=lambda v:int(v[:2])*60+int(v[3:])
   assert to_seconds(after)<to_seconds(before),('clock did not resume',before,after)
   print('FIRST MOVE / VARIATION PAUSE / RESUME OK',flush=True)
+  page.close()
+  # Phase-one regressions: claimable draw, non-destructive cancellation and undo safety.
+  page=browser.new_page(viewport={'width':1440,'height':900})
+  errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+  page.set_content(html,wait_until='domcontentloaded')
+  page.wait_for_selector('.square',timeout=15000)
+  page.locator('[data-mode="local"]').click()
+  page.locator('#time-select').select_option('none')
+  page.locator('#new-game').click()
+  for from_sq,to_sq in [('g1','f3'),('g8','f6'),('f3','g1'),('f6','g8')]*2:
+    page.locator(f'.square[data-square="{from_sq}"]').click()
+    page.locator(f'.square[data-square="{to_sq}"]').click()
+  assert page.locator('#claim-draw').is_enabled(), 'threefold draw should be claimable'
+  assert '和棋' not in page.locator('#game-status-title').inner_text(), 'third repetition should not auto-end game'
+  page.locator('#claim-draw').click()
+  assert '和棋' in page.locator('#game-status-title').inner_text()
+  page.locator('#main-menu-open').click()
+  page.locator('#new-game').click()
+  assert page.locator('#confirm-modal').is_visible(), 'finished game should not be overwritten silently'
+  page.locator('#confirm-cancel').click()
+  assert '和棋' in page.locator('#game-status-title').inner_text()
+  assert not errors,errors
+  page.close()
+
+  page=browser.new_page(viewport={'width':1440,'height':900})
+  errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+  page.set_content(html,wait_until='domcontentloaded')
+  page.wait_for_selector('.square',timeout=15000)
+  page.locator('[data-mode="local"]').click()
+  page.locator('#new-game').click()
+  page.locator('.square[data-square="e2"]').click()
+  page.locator('.square[data-square="e4"]').click()
+  page.locator('#position-note').fill('Old e4 note')
+  page.locator('#undo-btn').click()
+  assert page.locator('#confirm-modal').is_visible(), 'undo must warn before deleting research'
+  page.locator('#confirm-cancel').click()
+  assert page.locator('#moves-count').inner_text()=='1 PLIES'
+  page.locator('#undo-btn').click()
+  page.locator('#confirm-yes').click()
+  assert page.locator('#moves-count').inner_text()=='0 PLIES'
+  page.locator('.square[data-square="d2"]').click()
+  page.locator('.square[data-square="d4"]').click()
+  assert page.locator('#position-note').input_value()=='', 'new first move must not inherit e4 notes'
+  assert not errors,errors
+  print('PHASE 1 UI: DRAW CLAIM, SAFE NEW GAME, UNDO STUDY INTEGRITY OK',flush=True)
   page.close()
   browser.close()

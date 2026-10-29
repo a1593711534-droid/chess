@@ -59,7 +59,7 @@ test('cancelled Stockfish bestmove is not incorrectly delivered to a new search'
 });
 test('UI always validates a manual save before replacing the active session',()=>{
   const app=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
-  assert.match(app,/const next=new ChessSession\(manual\.game\.config\);next\.restore\(manual\.game,\{resumeClock:false\}\)/);
+  assert.match(app,/const next=new ChessSession\(manual\.game\.config\);next\.restore\(manual\.game,\{resumeClock:false,strictStudy:true\}\)/);
   assert.match(app,/cancelSearch\(\);session=next/);
   assert.match(app,/strictStudy:true/);
   assert.match(app,/preserveAnalysis:true/);

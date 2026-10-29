@@ -16,6 +16,24 @@ export const SKILL_LEVELS=Object.freeze(Object.fromEntries(Array.from({length:21
   skill:i,movetime:2000}
 ])));
 export const resolveLevel=id=>SKILL_LEVELS[id]||LEVELS[id]||SKILL_LEVELS['skill-10'];
+
+/** FIDE 6.9: a flag only wins if the opponent could mate by some legal sequence.
+ * This is a possibility test, not an assessment of whether mate is forceable.
+ */
+export function canPossiblyMate(game,color){
+  const pieces=game.board().flat().filter(Boolean);
+  const attackers=pieces.filter(p=>p.color===color&&p.type!=='k');
+  if(!attackers.length)return false;
+  if(attackers.some(p=>['p','r','q'].includes(p.type)))return true;
+  const defenders=pieces.filter(p=>p.color!==color&&p.type!=='k');
+  // A defending piece can obstruct its own king, enabling helpmates.
+  if(defenders.length)return true;
+  const knights=attackers.filter(p=>p.type==='n').length;
+  const bishops=attackers.filter(p=>p.type==='b');
+  if(knights)return knights>=2||bishops.length>0;
+  // Bishops operating on only one square colour cannot mate a bare king.
+  return new Set(bishops.map(p=>('abcdefgh'.indexOf(p.square[0])+Number(p.square[1]))%2)).size>=2;
+}
 export class ChessSession{
   constructor(prefs){this.configure(prefs);}
   configure(prefs){
@@ -31,7 +49,31 @@ export class ChessSession{
     for(let i=0;i<this.cursor;i++)view.move(moves[i].san);
     return view;
   }
-  get done(){return !!this.result||this.game.isGameOver()||!!this.clock.timeout;}
+  get done(){return !!this.status();}
+  /** At three repetitions / 50 moves the side to move may claim, but play continues. */
+  canClaimDraw(){
+    return !this.status()&&this.atLatest&&(this.game.isThreefoldRepetition()||this.game.isDrawByFiftyMoves());
+  }
+  claimDraw(){
+    // A draw claim cannot retroactively overrule a clock that has just flagged.
+    this.clock.tick();
+    if(!this.isHumanTurn()||!this.canClaimDraw())return false;
+    this.result={winner:null,kind:this.game.isThreefoldRepetition()?'threefold-claim':'fifty-move-claim'};
+    this.clock.pause();
+    return true;
+  }
+  /** Five repetitions end the game automatically (not three). */
+  isFivefoldRepetition(){
+    if(!this.game.isThreefoldRepetition())return false;
+    const signature=game=>game.fen().split(' ').slice(0,4).join(' ');
+    const target=signature(this.game),replay=new Chess(this.initialFen);
+    let matches=signature(replay)===target?1:0;
+    for(const san of this.game.history()){
+      replay.move(san);
+      if(signature(replay)===target&&++matches>=5)return true;
+    }
+    return false;
+  }
   isHumanTurn(){return this.config.mode==='local'||this.game.turn()===this.config.side;}
   play(move){
     if(!this.atLatest||this.done)return null;
@@ -43,20 +85,27 @@ export class ChessSession{
       if(this.headers.Result&&this.headers.Result!=='*')this.headers.Result='*';
       this.cursor=this.ply;this.lastMove=result;this.clock.afterMove(result.color,this.game.turn());
       // Checkmate/draw ends the clock immediately; neither side can later flag.
-      if(this.game.isGameOver())this.clock.pause();
+      if(this.status())this.clock.pause();
       return result;
     }catch{return null;}
+  }
+  undoTargetPly(){
+    const take=this.config.mode==='ai'?(this.ply===1?1:this.isHumanTurn()?2:1):1;
+    return Math.max(0,this.ply-take);
   }
   undo(){
     if(this.ply===0)return 0;this.clock.pause();this.clock.timeout=null;this.result=null;
     if(this.headers.Result&&this.headers.Result!=='*')this.headers.Result='*';
-    const take=this.config.mode==='ai'?(this.ply===1?1:this.isHumanTurn()?2:1):1;
+    const take=this.ply-this.undoTargetPly();
     let undone=0,restoreClock=null;
     for(let i=0;i<take;i++)if(this.game.undo()){
       undone++;restoreClock=this.clockSnapshots.pop()||null;
     }
     if(restoreClock)this.clock.restore(restoreClock,{resume:true});
-    this.cursor=this.ply;this.lastMove=this.moves.at(-1)||null;return undone;
+    this.cursor=this.ply;this.lastMove=this.moves.at(-1)||null;
+    // Removed main-line positions must not inherit their former notes/marks/branches.
+    if(undone)this.study.pruneAfter(this.ply);
+    return undone;
   }
   goTo(ply){this.cursor=Math.min(this.ply,Math.max(0,ply));}
   pgn(){
@@ -86,6 +135,12 @@ export class ChessSession{
   serialize(){return {version:1,config:this.config,initialFen:this.initialFen,headers:this.headers,moves:this.moves.map(m=>m.san),result:this.result,clock:this.clock.snapshot(),clockSnapshots:this.clockSnapshots,study:this.study.serialize()};}
   restore(saved,{resumeClock=true,accountElapsed=false,strictStudy=false}={}){
     if(!saved||saved.version!==1||!saved.config||typeof saved.config!=='object'||Array.isArray(saved.config)||!Array.isArray(saved.moves)||saved.moves.length>2000)throw Error('Invalid saved game');
+    if(!['ai','local'].includes(saved.config.mode)
+      ||!['w','b'].includes(saved.config.side)
+      ||!(saved.config.time==='none'||/^[0-9]{1,3}\+[0-9]{1,3}$/.test(saved.config.time))
+      ||saved.moves.some(san=>typeof san!=='string'||san.length>32))throw Error('Invalid saved configuration or moves');
+    if(strictStudy&&(!saved.study||typeof saved.study!=='object'))throw Error('研究備份缺少研究資料');
+    if(saved.clockSnapshots!==undefined&&(!Array.isArray(saved.clockSnapshots)||saved.clockSnapshots.length>2000))throw Error('Invalid saved clock history');
     this.configure(saved.config);
     if(!this.config.aiThink)this.config.aiThink=String(resolveLevel(this.config.level).movetime);
     // Old saves used fixed time; do not silently reinterpret them.
@@ -94,8 +149,28 @@ export class ChessSession{
     saved.moves.forEach(san=>this.game.move(san,{strict:true}));
     this.cursor=this.ply;this.lastMove=this.moves.at(-1)||null;this.result=saved.result||null;this.study=new StudyBook(saved.study,{strict:strictStudy});
     this.clockSnapshots=Array.isArray(saved.clockSnapshots)?saved.clockSnapshots:[];
+    if(strictStudy){
+      const positions=[new Chess(this.initialFen).fen()],replay=new Chess(this.initialFen);
+      for(const san of saved.moves){replay.move(san);positions.push(replay.fen());}
+      for(const branch of this.study.branches){
+        if(branch.origin>=positions.length||branch.fen!==positions[branch.origin]){
+          throw Error('研究備份的變例起點與主線不一致');
+        }
+      }
+      for(const key of [...Object.keys(this.study.notes),...Object.keys(this.study.marks)]){
+        if(Number(key)>this.ply)throw Error('研究備份包含超出主線的註解或標記');
+      }
+    }
+    if(saved.clock!==undefined&&saved.clock!==null){
+      if(!saved.clock||typeof saved.clock!=='object'||Array.isArray(saved.clock)
+        ||!saved.clock.remaining||['w','b'].some(side=>!Number.isFinite(saved.clock.remaining[side])||saved.clock.remaining[side]<0)
+        ||(saved.clock.active!=null&&!['w','b'].includes(saved.clock.active))
+        ||(saved.clock.timeout!=null&&!['w','b'].includes(saved.clock.timeout))){
+        throw Error('Invalid saved clock');
+      }
+    }
     this.clock.restore(saved.clock,{resume:resumeClock,accountElapsed});
-    if(this.result||this.game.isGameOver())this.clock.pause();
+    if(this.status())this.clock.pause();
   }
   captured(){
     const pieces={w:[],b:[]};for(const m of this.moves){if(m.captured)pieces[m.color].push(m.captured);}
@@ -106,8 +181,16 @@ export class ChessSession{
   status(){
     if(this.result)return this.result;
     if(this.game.isCheckmate())return {winner:this.game.turn()==='w'?'b':'w',kind:'checkmate'};
-    if(this.game.isDraw())return {winner:null,kind:this.game.isStalemate()?'stalemate':this.game.isThreefoldRepetition()?'threefold':this.game.isInsufficientMaterial()?'insufficient':'draw'};
-    if(this.clock.timeout)return {winner:this.clock.timeout==='w'?'b':'w',kind:'timeout'};
+    if(this.game.isStalemate())return {winner:null,kind:'stalemate'};
+    if(this.game.isInsufficientMaterial())return {winner:null,kind:'insufficient'};
+    // FIDE 9.6: five repetitions / 75 moves are automatic. The threefold /
+    // 50-move conditions instead require a claim by the player to move.
+    if(Number(this.game.fen().split(' ')[4])>=150)return {winner:null,kind:'seventyfive-move'};
+    if(this.isFivefoldRepetition())return {winner:null,kind:'fivefold'};
+    if(this.clock.timeout){
+      const winner=this.clock.timeout==='w'?'b':'w';
+      return canPossiblyMate(this.game,winner)?{winner,kind:'timeout'}:{winner:null,kind:'timeout-insufficient'};
+    }
     return null;
   }
 }

@@ -22,7 +22,7 @@ for file in MODULES:
         code=code.replace('export const pieceSrc=(type,color)=>`./assets/pieces/${color}${PIECES[color][type]}.svg`;',"export const pieceSrc=(type,color)=>({IMAGE_DATA})[color+PIECES[color][type]];".replace('{IMAGE_DATA}',json.dumps(image_urls)))
     modules[key(file)]='data:text/javascript;base64,'+base64.b64encode(code.encode()).decode()
 html=(ROOT/'index.html').read_text()
-css='\n'.join((ROOT/'styles'/n).read_text() for n in ['base.css','layout.css','board.css','mobile.css','pro.css','viewport.css','main-menu.css','readability.css'])
+css='\n'.join((ROOT/'styles'/n).read_text() for n in ['base.css','layout.css','board.css','mobile.css','pro.css','viewport.css','main-menu.css','readability.css','focus.css'])
 html=re.sub(r'<link rel="stylesheet"[^>]*>', '',html)
 html=re.sub(r'<script type="module" src="./src/main\.js(?:\?v=[^"]+)?"></script>', '',html)
 html=html.replace('</head>',f'<style>{css}</style><script type="importmap">'+json.dumps({'imports':modules})+'</script></head>')
@@ -47,7 +47,7 @@ with sync_playwright() as pw:
     assert not errs, errs
     page.screenshot(path=str(ROOT/f'PREVIEW_{width}.png'))
     if width==1440:
-      page.locator('#tab-openings').click()
+      page.locator('#show-records').click();page.locator('#tab-openings').click()
       assert page.locator('#opening-library .library-card').count()==33
       page.screenshot(path=str(ROOT/'PREVIEW_OPENINGS.png'))
       page.locator('#tab-training').click()
@@ -57,24 +57,29 @@ with sync_playwright() as pw:
       page.screenshot(path=str(ROOT/'PREVIEW_TRAINING.png'))
       page.locator('.square[data-square="g6"]').click();page.locator('.square[data-square="h6"]').click()
       assert '訓練完成' in page.locator('#game-status-title').inner_text()
-      page.locator('#training-exit').click()
+      page.locator('#focus-return').click()
       # Training must restore the board orientation that was active beforehand.
-      page.locator('#flip-btn').click()
+      page.locator('#mobile-flip-btn').click()
       original_top_left=page.locator('.square').first.get_attribute('data-square')
+      page.locator('#show-records').click();page.locator('#tab-training').click()
       page.locator('#puzzle-library .library-card').first.click()
-      page.locator('#training-exit').click()
+      page.locator('#focus-return').click()
       assert page.locator('.square').first.get_attribute('data-square')==original_top_left
-      page.locator('#flip-btn').click()
-      page.locator('#main-menu-open').click();page.locator('#menu-new').click()
+      page.locator('#mobile-flip-btn').click()
+      page.locator('#mobile-main-menu').click();page.locator('#menu-new').click()
       page.locator('[data-mode="local"]').click();page.locator('#new-game').click()
       page.locator('.square[data-square="e2"]').click();page.locator('.square[data-square="e4"]').click()
       assert page.locator('#moves-count').inner_text()=='1 PLIES'
-      page.locator('#tab-moves').click();page.locator('#position-note').fill('Centre control')
+      page.locator('#show-records').click();page.locator('#tab-moves').click()
+      page.locator('#focus-study-editor summary').click()
+      page.locator('#position-note').fill('Centre control')
       page.locator('#save-note').click();page.locator('#create-variation').click()
       page.locator('.square[data-square="e7"]').click();page.locator('.square[data-square="e5"]').click()
-      page.locator('#finish-variation').click()
+      page.locator('#focus-return').click()
       assert page.locator('.variation-item').count()==1
       # Export/import JSON backups with study branches and comments.
+      page.locator('#show-records').click()
+      page.locator('.focus-files summary').click()
       with page.expect_download() as download_info:
         page.locator('#download-study').click()
       backup=Path(download_info.value.path()).read_text(encoding='utf-8')
@@ -101,10 +106,10 @@ with sync_playwright() as pw:
       print('USER FLOW / DRAG / KEYBOARD / PGN OK',flush=True)
       assert not errs,errs
     if width==390:
-      page.locator('[data-mobile="records"]').click()
-      page.locator('#tab-openings').click()
+      page.locator('#show-records').click()
+      page.locator('#show-records').click();page.locator('#tab-openings').click()
       page.screenshot(path=str(ROOT/'PREVIEW_MOBILE_STUDY.png'))
-      page.locator('[data-mobile="board"]').click()
+      page.locator('#close-records').click()
       page.locator('#mobile-annotate-btn').click()
       page.locator('.square[data-square="e2"]').click()
       page.locator('.square[data-square="e4"]').click()
@@ -180,12 +185,13 @@ with sync_playwright() as pw:
   page.clock.run_for(300)
   before=page.locator('#bottom-clock').inner_text()
   assert before!='03:00',('first move was not charged',before)
-  page.locator('#tab-moves').click()
+  page.locator('#show-records').click();page.locator('#tab-moves').click()
+  page.locator('#focus-study-editor summary').click()
   page.locator('#create-variation').click()
   page.clock.fast_forward(181000)
   page.clock.run_for(300)
   assert page.locator('#bottom-clock').inner_text()=='STUDY'
-  page.locator('#finish-variation').click()
+  page.locator('#focus-return').click()
   during=page.locator('#bottom-clock').inner_text()
   assert during==before,('variation consumed game time',before,during)
   page.clock.fast_forward(2500)

@@ -44,7 +44,7 @@ try:
                 page.locator('.square[data-square="e2"]').click();page.locator('.square[data-square="e4"]').click()
                 assert page.locator('#moves-count').inner_text()=='1 PLIES'
                 page.locator('#focus-open-study').click();page.locator('#tab-moves').click()
-                                page.locator('#position-note').fill('Good centre')
+                page.locator('#position-note').fill('Good centre')
                 page.locator('#save-note').click()
                 page.locator('#create-variation').click()
                 page.locator('.square[data-square="e7"]').click();page.locator('.square[data-square="e5"]').click()

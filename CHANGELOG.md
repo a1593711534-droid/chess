@@ -1,3 +1,23 @@
+## v2.3.6 — Phase 3: history-index performance, UI refactor and real engine CI
+
+- Cache verbose chess history, repeated position counts, historic views and automatic adjudication; incrementally update on move/undo and invalidate on replaced game state.
+- Extract notation and opening/training panels from the main application controller; avoid unnecessary hidden-tab and unchanged-move DOM updates.
+- Consolidate the final phase-two CSS overrides into the experience stylesheet without changing their order.
+- Test the real Stockfish 19 single-WASM Worker in Chromium on PRs, including MultiPV and legal bestmove; pin both size and SHA-256 for test and deployment.
+- Add long-history regression tests and streamline the GitHub Pages build to reuse the verified binary.
+
+## v2.3.5 — Phase 2: mobile interface and accessibility
+
+- Improve short-landscape chessboard usability, touch targets and scrolling.
+- Add annotations with visible start state and Escape cancellation, legal-target announcements and keyboard-accessible analysis tabs.
+- Show white-perspective analysis descriptions, automatic/manual save timestamps and mobile shortcuts.
+
+## v2.3.4 — Phase 1: chess rules and study integrity
+
+- Align time forfeits and automatic/claimable draws with FIDE rules; explicitly claim threefold repetition and 50-move draws.
+- Confirm before overwriting finished or annotated games, deduplicate retries of variation saves and prevent stale study annotations after undo.
+- Validate manual and automatic saves before replacing a live session and reject malformed clock and branch state.
+
 ## v2.3.3 — Save corruption safety and better engine interruption recovery
 
 - Detect invalid JSON auto/manual saves and avoid overwriting an active game on failed manual restore.

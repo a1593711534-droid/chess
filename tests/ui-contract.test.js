@@ -4,14 +4,14 @@ import {readFileSync} from 'node:fs';
 import {APP_VERSION,REQUIRED_IDS,inspectUi} from '../src/ui/boot.js';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const js=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+const js=['main.js','ui/notation-view.js','ui/library-panels.js'].map(name=>readFileSync(new URL('../src/'+name,import.meta.url),'utf8')).join('\n');
 const ids=new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]));
 const literalRefs=[...js.matchAll(/\$\(['"]([^'"]+)['"]\)/g)].map(m=>m[1]);
 
-test('all 134 referenced UI elements exist in distributed HTML',()=>{
+test('all 136 referenced UI elements exist in distributed HTML',()=>{
   for(const id of literalRefs)assert.ok(ids.has(id),`missing ${id}`);
   for(const id of literalRefs)assert.ok(REQUIRED_IDS.includes(id),`UI contract does not include ${id}`);
-  assert.equal(new Set(literalRefs).size,134);
+  assert.equal(new Set(literalRefs).size,136);
 });
 test('the release marker and imported script refer to the same version',()=>{
   assert.match(html,new RegExp(`data-app-version="${APP_VERSION.replaceAll('.','\\.')}"`));

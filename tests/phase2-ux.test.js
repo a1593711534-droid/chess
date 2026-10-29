@@ -5,7 +5,7 @@ import {describeEvaluation} from '../src/ui/evaluation.js';
 
 const app=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const uxCss=readFileSync(new URL('../styles/ux-phase2.css',import.meta.url),'utf8');
+const uxCss=readFileSync(new URL('../styles/experience.css',import.meta.url),'utf8');
 const board=readFileSync(new URL('../src/ui/board.js',import.meta.url),'utf8');
 const sw=readFileSync(new URL('../sw.js',import.meta.url),'utf8');
 
@@ -51,5 +51,5 @@ test('analysis labels, roving tabs and bundled offline assets cover all new feat
   assert.match(app,/button\.onkeydown=event=>/);
   assert.match(app,/b\.tabIndex=active\?0:-1/);
   assert.match(sw,/src\/ui\/evaluation\.js/);
-  assert.match(sw,/styles\/ux-phase2\.css/);
+  assert.match(sw,/styles\/experience\.css/);
 });

@@ -161,7 +161,7 @@ with sync_playwright() as pw:
   print('MISSING OPTIONAL CONTROL RECOVERED',flush=True)
   page.close()
   # Regression: an old HTML build must present a clear recovery screen.
-  mismatched=html.replace('data-app-version="2.3.5"','data-app-version="2.0.0"')
+  mismatched=html.replace('data-app-version="2.3.6"','data-app-version="2.0.0"')
   assert mismatched!=html
   page=browser.new_page()
   errors=[];page.on('pageerror',lambda exc:errors.append(str(exc)))

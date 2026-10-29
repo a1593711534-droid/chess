@@ -1,16 +1,16 @@
 /* Offline support for the static, same-origin Chess Atelier GitHub Pages app. */
-const SHELL_CACHE='chess-atelier-shell-2.3.5-phase2';
+const SHELL_CACHE='chess-atelier-shell-2.3.6-phase3';
 const ENGINE_CACHE='chess-atelier-stockfish-19.0.1';
 const PREFIX='chess-atelier-';
 const SHELL_FILES=[
   '', 'index.html',
   'styles/base.css','styles/layout.css','styles/board.css','styles/mobile.css',
-  'styles/pro.css','styles/viewport.css','styles/main-menu.css','styles/readability.css','styles/focus.css','styles/experience.css','styles/ux-phase2.css',
+  'styles/pro.css','styles/viewport.css','styles/main-menu.css','styles/readability.css','styles/focus.css','styles/experience.css',
   'src/main.js','src/chess/clock.js','src/chess/engine.js','src/chess/fallback.js',
-  'src/chess/notation.js','src/chess/session.js','src/chess/time-management.js',
+  'src/chess/notation.js','src/chess/session.js','src/chess/history-index.js','src/chess/time-management.js',
   'src/data/openings.js','src/data/puzzles.js',
   'src/study/studybook.js','src/study/training.js',
-  'src/ui/board.js','src/ui/boot.js','src/ui/toast.js','src/ui/evaluation.js',
+  'src/ui/board.js','src/ui/boot.js','src/ui/toast.js','src/ui/evaluation.js','src/ui/notation-view.js','src/ui/library-panels.js',
   'src/utils/icons.js','src/utils/preferences.js','src/utils/sound.js',
   'vendor/chess.js','vendor/stockfish-19-single.js','assets/favicon.svg',
   ...['w','b'].flatMap(color=>['B','K','N','P','Q','R'].map(type=>`assets/pieces/${color}${type}.svg`)),

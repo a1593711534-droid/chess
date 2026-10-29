@@ -5,15 +5,16 @@ import {selectAiSearch,describeAiTime,normalizeAiTimeMode} from './chess/time-ma
 import {moveToUci,pvToSan,scoreWhite} from './chess/notation.js';
 import {fallbackMove} from './chess/fallback.js';
 import {createBoard,pieceSrc} from './ui/board.js';
+import {createNotationView} from './ui/notation-view.js';
+import {renderOpeningLibrary,renderPuzzleLibrary} from './ui/library-panels.js';
 import {describeEvaluation} from './ui/evaluation.js';
 import {toast} from './ui/toast.js';
 import {loadPrefs,savePrefs,inspectSavedGame,inspectManualGame,saveGame,saveManualGame} from './utils/preferences.js';
 import {playSound} from './utils/sound.js';
 import {decorateIcons} from './utils/icons.js';
-import {OPENINGS,openingFor,continuations,openingGame} from './data/openings.js';
-import {PUZZLES,CATEGORIES,readTrainingStats,recordPuzzle} from './data/puzzles.js';
+import {CATEGORIES,recordPuzzle} from './data/puzzles.js';
 import {TrainingSession} from './study/training.js';
-import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.5';
+import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.6';
 
 const $=id=>document.getElementById(id);
 let prefs=loadPrefs();
@@ -29,7 +30,8 @@ let openingFilter='all',puzzleFilter='全部';
 let promotion=null,confirmCallback=null;
 let engineError=null;
 let engine=null;
-let board=null;
+let board=null,renderNotationView=null;
+let openingRenderKey=null,trainingRenderKey=null;
 let menuEditing=true,sessionActive=false,menuPauseSide=null,menuFocusBeforeOpen=null;
 const menuVisible=()=>!$('main-menu-modal').classList.contains('hidden');
 function ensureEngine(){
@@ -68,6 +70,7 @@ function createGameBoard(){
     if(training||variation)return;
     session.study.toggleMark(session.cursor,from,to);render();save();
   },message=>{$('board-live').textContent=message;});
+  renderNotationView=createNotationView($,goToPly);
 }
 const activeGame=()=>training?.game||variation?.game||session.current;
 const inputUci=m=>`${m.from}${m.to}${m.promotion||''}`;
@@ -447,29 +450,8 @@ function updateClocks(){
   }
 }
 function renderMoves(){
-  const moves=session.moves;const list=$('moves-list');
-  renderStudy();$('moves-count').textContent=`${moves.length} PLIES`;
-  $('position-indicator').textContent=session.cursor===0?'起始位置':`${session.cursor} / ${moves.length}`;
-  for(const [button,disabled] of [['nav-start',session.cursor===0],['nav-prev',session.cursor===0],['nav-next',session.cursor===moves.length],['nav-end',session.cursor===moves.length]])$(button).disabled=disabled;
-  const previous=list.querySelector('.move-token.current')?.dataset.ply;
-  if(!moves.length){list.innerHTML='<div class="empty-state"><span class="empty-mark">♞</span><strong>棋局尚未開始</strong><small>每一步精彩著法，將在此完整記錄。</small></div>';return;}
-  list.innerHTML='';const fragment=document.createDocumentFragment();
-  const fenParts=session.initialFen.split(' ');
-  const firstPly=(Math.max(1,Number(fenParts[5])||1)-1)*2+(fenParts[1]==='b'?1:0);
-  for(let i=0;i<moves.length;){
-    const blackFirst=(firstPly+i)%2===1;
-    const row=document.createElement('div');row.className='move-row';
-    const num=document.createElement('span');num.className='move-number';num.textContent=`${Math.floor((firstPly+i)/2)+1}${blackFirst?'...':'.'}`;row.append(num);
-    if(blackFirst){const spacer=document.createElement('span');spacer.setAttribute('aria-hidden','true');row.append(spacer);}
-    for(const j of (blackFirst?[i]:[i,i+1])){
-      if(j>=moves.length)break;
-      const button=document.createElement('button');button.type='button';button.className='move-token'+(session.cursor===j+1?' current':'');button.dataset.ply=String(j+1);button.textContent=moves[j].san;button.title=`查看第 ${j+1} 步`;
-      button.onclick=()=>goToPly(j+1);row.append(button);
-    }fragment.append(row);
-    i+=blackFirst?1:2;
-  }
-  list.append(fragment);
-  if(String(session.cursor)!==previous)list.querySelector('.move-token.current')?.scrollIntoView({block:'nearest'});
+  // Notes/variations remain cursor-sensitive; notation DOM is memoized separately.
+  renderStudy();renderNotationView(session);
 }
 function renderAnalysis(){
   const target=$('analysis-state');
@@ -635,6 +617,8 @@ function openRightPanel(tab='moves'){
   document.querySelectorAll('.panel-tab').forEach(b=>{const active=b.dataset.tab===tab;b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;});
   for(const name of ['moves','analysis','openings','training'])$(`${name}-tab`).classList.toggle('hidden',tab!==name);
   openDrawer('records');
+  if(tab==='openings')renderOpenings();
+  else if(tab==='training')renderTraining();
 }
 
 function renderStudy(){
@@ -656,41 +640,18 @@ function renderStudy(){
   });
 }
 function renderOpenings(){
-  const history=session.current.history();const found=openingFor(history);
-  const next=continuations(history);
-  $('opening-detected').textContent=found?`${found.eco} · ${found.name}`:history.length?(next.length?'尚未確定開局 · 繼續走棋以辨識':'目前路線不在精選庫中'):'標準起始局面 · 33 條精選路線';
-  const cand=$('opening-candidates');cand.innerHTML='';
-  for(const option of next.slice(0,8)){
-    const item=document.createElement('div');item.className='candidate-item';
-    const label=document.createElement('strong');label.textContent=option.san;
-    const detail=document.createElement('small');detail.textContent=option.lines.slice(0,2).map(x=>x.name).join(' · ');
-    item.append(label,detail);cand.append(item);
-  }
-  if(!next.length){const msg=document.createElement('small');msg.className='muted-placeholder';msg.textContent='精選路線在此沒有更多續著。';cand.append(msg);}
-  const library=$('opening-library');library.innerHTML='';
-  const filtered=OPENINGS.filter(o=>openingFilter==='all'||(openingFilter==='other'?!['e4','d4'].includes(o.moves[0]):o.moves[0]===openingFilter));
-  for(const row of filtered){
-    const el=document.createElement('button');el.className='library-card';el.type='button';
-    const top=document.createElement('span');top.className='library-top';const eco=document.createElement('b');eco.textContent=row.eco;const name=document.createElement('strong');name.textContent=row.name;top.append(eco,name);
-    const moves=document.createElement('small');moves.textContent=row.moves.map((m,i)=>(i%2===0?`${Math.floor(i/2)+1}. `:'')+m).join(' ').slice(0,110);
-    const action=document.createElement('em');action.textContent='練習此路線  ↗';el.append(top,moves,action);
-    el.onclick=()=>startExercise(openingExercise(row));library.append(el);
-  }
+  if($('openings-tab').classList.contains('hidden'))return;
+  const key=`${session.historyIndex.revision}:${session.cursor}:${openingFilter}:${session.initialFen}`;
+  if(openingRenderKey?.session===session&&openingRenderKey?.key===key)return;
+  renderOpeningLibrary($,{history:session.current.history(),filter:openingFilter,startExercise:row=>startExercise(openingExercise(row))});
+  openingRenderKey={session,key};
 }
 function renderTraining(){
-  const stats=readTrainingStats(),solved=Object.values(stats).filter(x=>x?.solved).length;
-  $('solved-count').textContent=`${solved} / ${PUZZLES.length}`;
-  $('training-active').classList.toggle('hidden',!training);
-  if(training){$('training-label').textContent=training.exercise.category.toUpperCase();$('training-name').textContent=training.exercise.title;
-    $('training-goal').textContent=training.solved?'✅ 練習完成。可以再練一次或選擇下一題。':training.exercise.goal;
-    $('training-step').textContent=`進度 ${training.progress}`;$('training-errors').textContent=`嘗試錯誤 ${training.errors}`;}
-  const list=$('puzzle-library');list.innerHTML='';
-  for(const p of PUZZLES.filter(x=>puzzleFilter==='全部'||x.category===puzzleFilter)){
-    const b=document.createElement('button');b.className='library-card puzzle-card';b.type='button';
-    const top=document.createElement('span');top.className='library-top';const star=document.createElement('b');star.textContent=stats[p.id]?.solved?'✓':`★${p.rating}`;const title=document.createElement('strong');title.textContent=p.title;top.append(star,title);
-    const desc=document.createElement('small');desc.textContent=`${p.category} · ${p.goal}`;b.append(top,desc);
-    b.onclick=()=>startExercise(p);list.append(b);
-  }
+  if($('training-tab').classList.contains('hidden'))return;
+  const key=`${trainingToken}:${training?.progress??0}:${training?.errors??0}:${training?.pendingReply??false}:${training?.solved??false}:${puzzleFilter}`;
+  if(trainingRenderKey?.key===key&&trainingRenderKey?.training===training)return;
+  renderPuzzleLibrary($,{training,filter:puzzleFilter,startExercise});
+  trainingRenderKey={training,key};
 }
 function bindActions(){
   document.querySelectorAll('[data-mode]').forEach(el=>el.onclick=()=>{document.querySelectorAll('[data-mode]').forEach(x=>x.classList.remove('active'));el.classList.add('active');refreshPrefsFromUi();});
@@ -743,8 +704,8 @@ function bindActions(){
   $('save-note').onclick=()=>{clearTimeout(noteSaveTimer);session.study.setNote(session.cursor,$('position-note').value);save();toast('棋譜註解已儲存，也會寫入匯出的 PGN。');};
   $('create-variation').onclick=beginVariation;$('finish-variation').onclick=finishVariation;
   $('export-variation').onclick=()=>{if(variation)copyText(session.study.branchPgn(variation),'變例 PGN');};
-  $('opening-filter').onchange=e=>{openingFilter=e.target.value;renderOpenings();};
-  $('puzzle-filter').onchange=e=>{puzzleFilter=e.target.value;renderTraining();};
+  $('opening-filter').onchange=e=>{openingFilter=e.target.value;openingRenderKey=null;renderOpenings();};
+  $('puzzle-filter').onchange=e=>{puzzleFilter=e.target.value;trainingRenderKey=null;renderTraining();};
   $('training-reset').onclick=()=>{if(training){trainingToken++;training.restart();render();}};
   $('training-exit').onclick=()=>exitTraining();
   $('copy-fen').onclick=()=>copyText(activeGame().fen(),'FEN 局面');$('copy-pgn').onclick=()=>copyText(session.pgn(),'主線 PGN 棋譜');$('export-btn').onclick=exportPgn;

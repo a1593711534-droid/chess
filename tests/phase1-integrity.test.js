@@ -108,3 +108,11 @@ test('UI uses staged restore and asks before overwriting study or undoing annota
   assert.match(source,/sessionActive&&\(session\.ply>0\|\|session\.done\|\|hasResearch\)/);
   assert.match(source,/session\.study\.upsertBranch\(/);
 });
+
+test('strict restore rejects missing study, unknown modes, invalid clocks and invalid history',()=>{
+  const s=session(),record=s.serialize();
+  assert.throws(()=>session().restore({...record,study:null},{strictStudy:true}),/缺少研究資料/);
+  assert.throws(()=>session().restore({...record,config:{...record.config,mode:'unknown'}}),/Invalid saved configuration/);
+  assert.throws(()=>session().restore({...record,clockSnapshots:'broken'}),/Invalid saved clock history/);
+  assert.throws(()=>session().restore({...record,clock:{remaining:{w:100,b:200},active:'invalid'}}),/Invalid saved clock/);
+});

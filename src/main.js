@@ -284,7 +284,7 @@ function makeMove(input,computer=false){
   if(!computer&&session.config.mode==='ai'&&!session.isHumanTurn())runBot();
 }
 async function runBot(){
-  if(!sessionActive||menuVisible()||session.done||session.config.mode!=='ai'||session.isHumanTurn()||!session.atLatest)return;
+  if(!sessionActive||menuVisible()||training||variation||thinking||session.done||session.config.mode!=='ai'||session.isHumanTurn()||!session.atLatest)return;
   const token=++botSequence,fen=session.game.fen(),setting=resolveLevel(session.config.level);
   const budget=selectAiSearch(session.config,session.clock);
   if(!budget){
@@ -292,12 +292,12 @@ async function runBot(){
     if(outcome?.kind==='timeout'&&!session.result){session.result=outcome;save();toast(gameOutcomeText(outcome),'info');}
     render();return;
   }
-  thinking=true;render();
+  thinking=true;analysisLines=new Map();analysisInfo=null;analysisFen=null;render();
   let uci=null;
   try{
-    uci=await engine.search(fen,{skill:setting.skill,...budget,onInfo:info=>{
+    uci=await ensureEngine().search(fen,{skill:setting.skill,...budget,onInfo:info=>{
       if(botSequence!==token||session.game.fen()!==fen)return;
-      analysisInfo=info;analysisFen=fen;renderAnalysis();
+      analysisInfo=info;analysisFen=fen;analysisLines.set(info.multiPV||1,info);renderAnalysis();
     }});
   }catch(error){engineError=error;}
   if(token!==botSequence||session.game.fen()!==fen)return;
@@ -309,7 +309,7 @@ async function runBot(){
 }
 
 function doUndo(){
-  if(training){training.restart();render();return;}
+  if(training){trainingToken++;training.restart();render();return;}
   if(variation){if(variation.moves.length){variation.moves.pop();variation.game.undo();render();}return;}
   if(session.ply===0)return;
   cancelSearch();const n=session.undo();analysisInfo=null;analysisFen=null;lastHint=null;
@@ -392,7 +392,7 @@ function renderMoves(){
     for(const j of [i,i+1]){
       if(j>=moves.length)break;
       const button=document.createElement('button');button.type='button';button.className='move-token'+(session.cursor===j+1?' current':'');button.dataset.ply=String(j+1);button.textContent=moves[j].san;button.title=`查看第 ${j+1} 步`;
-      button.onclick=()=>{session.goTo(j+1);lastHint=null;render();};row.append(button);
+      button.onclick=()=>goToPly(j+1);row.append(button);
     }fragment.append(row);
   }
   list.append(fragment);
@@ -428,13 +428,14 @@ async function analyze(hint=false){
   }
   if(thinking){toast('請先等電腦完成著法。','info');return;}
   cancelSearch();const token=++analysisSequence,fen=activeGame().fen();
-  analysisLines=new Map();analysisRunning=true;$('stop-analysis').disabled=false;
+  analysisLines=new Map();analysisInfo=null;analysisFen=fen;
+  analysisRunning=true;$('stop-analysis').disabled=false;
   lastHint=null;
   $('analysis-state').textContent='分析中…';
   if(!hint)openRightPanel('analysis');
   let best=null,latest=null;
   try{
-    best=await engine.search(fen,{movetime:hint?850:Number($('analysis-time').value),multiPV:hint?1:Number($('multi-pv').value),skill:20,onInfo:info=>{
+    best=await ensureEngine().search(fen,{movetime:hint?850:Number($('analysis-time').value),multiPV:hint?1:Number($('multi-pv').value),skill:20,onInfo:info=>{
       if(token!==analysisSequence)return;
       analysisLines.set(info.multiPV||1,info);
       latest=analysisLines.get(1)||info;analysisInfo=latest;analysisFen=fen;renderAnalysis();
@@ -449,7 +450,18 @@ async function analyze(hint=false){
   }else toast('局面分析完成。');
   render();
 }
-function navigate(move){if(training||variation)return;const next=move==='first'?0:move==='last'?session.ply:session.cursor+(move==='prev'?-1:1);session.goTo(next);lastHint=null;render();}
+function goToPly(ply){
+  if(training||variation)return;
+  const wasLatest=session.atLatest;
+  const next=Math.max(0,Math.min(session.ply,ply));
+  if(next!==session.ply&&thinking)cancelSearch();
+  session.goTo(next);lastHint=null;render();
+  if(!wasLatest&&session.atLatest)resumeBotIfNeeded();
+}
+function navigate(move){
+  const next=move==='first'?0:move==='last'?session.ply:session.cursor+(move==='prev'?-1:1);
+  goToPly(next);
+}
 function flipBoard(){flipped=!flipped;render();}
 function doResign(){
   if(training||variation||session.done||session.ply===0)return;
@@ -475,7 +487,8 @@ function importPgn(){
     const text=$('pgn-input').value.trim();if(!text)throw new Error('請先貼上 PGN 棋譜。');
     const next=new ChessSession({...prefs,mode:'local',time:'none'});next.importPgn(text);
     cancelSearch();exitTraining(false);variation=null;session=next;$('position-note').dataset.ply='';flipped=false;lastHint=null;analysisInfo=null;analysisFen=null;
-    prefs={...prefs,mode:'local',time:'none'};savePrefs(prefs);renderSettings();closeModal('import-modal');render();save();toast(`已載入 ${session.ply} 步棋譜。`);closeDrawers();
+    prefs={...prefs,mode:'local',time:'none'};savePrefs(prefs);renderSettings();closeModal('import-modal');
+    sessionActive=true;render();save();toast(`已載入 ${session.ply} 步棋譜。`);closeDrawers();
   }catch(e){$('import-error').textContent=`匯入失敗：${e.message||'PGN 格式不正確'}`;}
 }
 function closeDrawers(){
@@ -596,7 +609,7 @@ function init(){
   try{
     decorateIcons();
     createGameBoard();
-    createEngine();
+    $('engine-status').textContent='Stockfish 19 · 按需載入';
     startApplication();
   }catch(error){
     console.error('[Chess Atelier PRO] Fatal initialization failure:',error);

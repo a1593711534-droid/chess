@@ -22,7 +22,10 @@ for file in MODULES:
         code=code.replace('export const pieceSrc=(type,color)=>`./assets/pieces/${color}${PIECES[color][type]}.svg`;',"export const pieceSrc=(type,color)=>({IMAGE_DATA})[color+PIECES[color][type]];".replace('{IMAGE_DATA}',json.dumps(image_urls)))
     modules[key(file)]='data:text/javascript;base64,'+base64.b64encode(code.encode()).decode()
 html=(ROOT/'index.html').read_text()
-css='\n'.join((ROOT/'styles'/n).read_text() for n in ['base.css','layout.css','board.css','mobile.css','pro.css','viewport.css','main-menu.css','readability.css','focus.css','experience.css'])
+# Match the actual stylesheet links rather than a stale hard-coded list.
+css_files=re.findall(r'<link rel="stylesheet" href="\./styles/([^"?]+)',html)
+assert css_files and len(css_files)==len(set(css_files)),css_files
+css='\n'.join((ROOT/'styles'/n).read_text() for n in css_files)
 html=re.sub(r'<link rel="stylesheet"[^>]*>', '',html)
 html=re.sub(r'<script type="module" src="./src/main\.js(?:\?v=[^"]+)?"></script>', '',html)
 html=html.replace('</head>',f'<style>{css}</style><script type="importmap">'+json.dumps({'imports':modules})+'</script></head>')
@@ -158,7 +161,7 @@ with sync_playwright() as pw:
   print('MISSING OPTIONAL CONTROL RECOVERED',flush=True)
   page.close()
   # Regression: an old HTML build must present a clear recovery screen.
-  mismatched=html.replace('data-app-version="2.3.4"','data-app-version="2.0.0"')
+  mismatched=html.replace('data-app-version="2.3.5"','data-app-version="2.0.0"')
   assert mismatched!=html
   page=browser.new_page()
   errors=[];page.on('pageerror',lambda exc:errors.append(str(exc)))
@@ -273,4 +276,48 @@ with sync_playwright() as pw:
   assert not errors,errors
   print('PHASE 1 UI: DRAW CLAIM, SAFE NEW GAME, UNDO STUDY INTEGRITY OK',flush=True)
   page.close()
+  # Phase 2: small landscape devices must scroll and keep usable squares.
+  for width,height in [(568,320),(667,375),(320,568)]:
+    page=browser.new_page(viewport={'width':width,'height':height},device_scale_factor=1)
+    errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+    page.set_content(html,wait_until='domcontentloaded')
+    page.wait_for_selector('.square',timeout=15000)
+    page.locator('[data-mode="local"]').click()
+    page.locator('#new-game').click()
+    sq=page.locator('.square[data-square="e2"]').bounding_box()
+    dims=page.evaluate('({x:document.documentElement.scrollWidth,y:document.documentElement.scrollHeight,w:innerWidth,h:innerHeight})')
+    assert sq and sq['width']>=37,(width,height,sq)
+    assert dims['x']<=width+1,('horizontal overflow',width,height,dims)
+    if height<=375:
+      assert sq['width']>=50,('landscape squares too small',width,height,sq)
+      assert dims['y']>height,('short viewport should be scrollable instead of shrinking board',dims)
+    assert page.locator('#mobile-analysis-btn').is_visible()
+    assert page.locator('#mobile-save-btn').is_visible()
+    page.locator('#mobile-annotate-btn').click()
+    page.locator('.square[data-square="e2"]').click()
+    assert 'annotation-start' in page.locator('.square[data-square="e2"]').get_attribute('class')
+    assert '標記起點' in page.locator('#board-live').inner_text()
+    page.locator('.square[data-square="e2"]').focus()
+    page.keyboard.press('Escape')
+    assert 'annotation-start' not in page.locator('.square[data-square="e2"]').get_attribute('class')
+    page.locator('.square[data-square="e2"]').click()
+    page.locator('.square[data-square="e4"]').click()
+    assert page.locator('#chessboard svg.board-annotations line').count()==1
+    page.locator('#mobile-annotate-btn').click()
+    page.locator('.square[data-square="e2"]').click()
+    assert page.locator('.square[data-square="e4"]').get_attribute('aria-label').find('合法落點')>=0
+    page.locator('.square[data-square="e2"]').focus()
+    page.keyboard.press('Escape')
+    page.locator('#mobile-analysis-btn').click()
+    assert page.locator('#right-panel').is_visible()
+    assert page.locator('#analysis-tab').is_visible()
+    page.locator('#tab-analysis').focus()
+    page.keyboard.press('ArrowRight')
+    assert page.locator('#tab-openings').get_attribute('aria-selected')=='true'
+    page.locator('#close-records').click()
+    page.locator('#mobile-save-btn').click()
+    assert '存檔' in page.locator('#arena-save-status').inner_text() or '儲存' in page.locator('#arena-save-status').inner_text()
+    assert not errors,errors
+    print('PHASE 2 MOBILE / LANDSCAPE / BOARD A11Y OK',width,height,dims,flush=True)
+    page.close()
   browser.close()

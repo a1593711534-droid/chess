@@ -1,11 +1,11 @@
 /* Offline support for the static, same-origin Chess Atelier GitHub Pages app. */
-const SHELL_CACHE='chess-atelier-shell-2.3.3';
+const SHELL_CACHE='chess-atelier-shell-2.3.3-focus-1';
 const ENGINE_CACHE='chess-atelier-stockfish-19.0.1';
 const PREFIX='chess-atelier-';
 const SHELL_FILES=[
   '', 'index.html',
   'styles/base.css','styles/layout.css','styles/board.css','styles/mobile.css',
-  'styles/pro.css','styles/viewport.css','styles/main-menu.css','styles/readability.css',
+  'styles/pro.css','styles/viewport.css','styles/main-menu.css','styles/readability.css','styles/focus.css',
   'src/main.js','src/chess/clock.js','src/chess/engine.js','src/chess/fallback.js',
   'src/chess/notation.js','src/chess/session.js','src/chess/time-management.js',
   'src/data/openings.js','src/data/puzzles.js',

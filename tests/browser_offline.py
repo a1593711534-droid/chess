@@ -63,7 +63,7 @@ try:
           game.moves=['illegal'];
           localStorage.setItem('chess-atelier-manual-save-v1',JSON.stringify({version:1,date:new Date().toISOString(),game}));
         }''')
-        page.locator('#main-menu-open').click()
+        page.locator('#mobile-main-menu').click()
         page.locator('#menu-load').click()
         page.locator('#confirm-yes').click()
         assert page.locator('#moves-count').inner_text()=='1 PLIES'
@@ -74,7 +74,8 @@ try:
           game.study.branches=[{origin:1,fen:'invalid fen',moves:['e7e5']}];
           return JSON.stringify({format:'chess-atelier-study-v1',game});
         }''')
-        page.locator('#tab-moves').click()
+        page.locator('#show-records').click();page.locator('#tab-moves').click()
+        page.locator('.focus-files summary').click()
         page.locator('#import-pgn').click()
         page.locator('#pgn-input').fill(invalid_backup)
         page.locator('#import-confirm').click()

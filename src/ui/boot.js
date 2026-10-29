@@ -21,7 +21,7 @@ export const REQUIRED_IDS=[
   'finish-variation','flip-btn','game-status-desc','game-status-title','hint-btn',
   'import-cancel','import-confirm','import-error','import-pgn','level-description',
   'level-section','level-select','main-menu-modal','main-menu-open','menu-close',
-  'menu-continue','menu-form','menu-load','menu-lock-badge','menu-new',
+  'menu-continue','menu-form','menu-load','menu-import','menu-lock-badge','menu-new',
   'menu-save','menu-saved-info','mobile-flip-btn','mobile-hint-btn','mobile-main-menu',
   'mobile-scrim','mobile-settings','mobile-undo-btn','moves-count','moves-list',
   'multi-pv','nav-end','nav-next','nav-prev','nav-start',

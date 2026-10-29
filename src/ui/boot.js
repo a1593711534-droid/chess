@@ -8,6 +8,7 @@ export const APP_VERSION='2.3.1';
 // Every literal id accessed by the application at startup or during gameplay.
 // Kept explicit so tests can detect newly added UI references.
 export const REQUIRED_IDS=[
+  'download-study','mobile-annotate-btn',
   'active-match-detail','active-match-summary','ai-time-mode','ai-time-mode-section','ai-time-note','ai-think-label','ai-think-section','ai-think-select','analysis-state',
   'analysis-time','analyze-btn','arena-type','chessboard','close-records',
   'confirm-cancel','confirm-modal','confirm-text','confirm-title','confirm-yes',

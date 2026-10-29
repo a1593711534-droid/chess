@@ -71,7 +71,7 @@
           <div class="player-right"><div class="captured-pieces" id="bottom-captured"></div><div class="clock-display active-clock" id="bottom-clock">10:00</div></div>
         </div>
         <div class="arena-footbar"><div><span class="mini-glow"></span><span id="turn-message">準備好迎接精彩對局</span></div><span class="keyboard-tip">右鍵畫箭頭 · F 翻轉 · Ctrl+Z 悔棋</span></div>
-        <div class="arena-mobile-actions"><button id="mobile-undo-btn"><span data-icon="undo"></span>悔棋</button><button id="mobile-flip-btn"><span data-icon="refresh"></span>翻轉棋盤</button><button id="mobile-hint-btn"><span data-icon="lightbulb"></span>提示</button></div>
+        <div class="arena-mobile-actions"><button id="mobile-undo-btn"><span data-icon="undo"></span>悔棋</button><button id="mobile-flip-btn"><span data-icon="refresh"></span>翻轉棋盤</button><button id="mobile-hint-btn"><span data-icon="lightbulb"></span>提示</button><button id="mobile-annotate-btn" type="button" aria-pressed="false">標記</button></div>
       </section>
 
       <aside class="side-panel right-panel" id="right-panel" aria-label="棋譜與分析">
@@ -116,7 +116,7 @@
           <div id="opening-candidates" class="candidate-list"></div>
           <div class="explorer-head"><span class="section-kicker">精選開局路線 · 33 LINES</span><select class="select-field" id="opening-filter" aria-label="搜尋開局類別"><option value="all">所有開局</option><option value="e4">王兵開局 e4</option><option value="d4">后兵開局 d4</option><option value="other">側翼開局</option></select></div>
           <div id="opening-library" class="explorer-list"></div>
-          <div class="source-disclosure">離線手工編選示例，不包含實戰勝率或大型比賽統計。</div>
+          <div class="source-disclosure">離線手工編選示例，未確定的開局不會提前命名；不包含實戰勝率或大型比賽統計。</div>
         </div>
         <div class="panel-body hidden training-panel" id="training-tab" role="tabpanel">
           <div class="training-overview"><div><span class="eyebrow">TACTICS ACADEMY</span><strong>棋藝訓練場</strong><small>解題即時判定 · 離線進度保存</small></div><div class="training-progress"><strong id="solved-count">0 / 16</strong><span>完成題目</span></div></div>
@@ -129,8 +129,8 @@
           <div class="fine-divider"></div>
           <div class="section-kicker">GAME FILES</div>
           <button class="file-action" id="copy-fen"><span data-icon="copy"></span><span>複製目前局面 FEN</span><span class="file-chevron">↗</span></button>
-          <button class="file-action" id="copy-pgn"><span data-icon="clipboard"></span><span>複製完整棋譜 PGN</span><span class="file-chevron">↗</span></button>
-          <button class="file-action" id="import-pgn"><span data-icon="upload"></span><span>匯入 PGN 棋譜</span><span class="file-chevron">↗</span></button>
+          <button class="file-action" id="copy-pgn"><span data-icon="clipboard"></span><span>複製主線棋譜 PGN</span><span class="file-chevron">↗</span></button>
+          <button class="file-action" id="download-study"><span data-icon="download"></span><span>下載完整研究備份 JSON</span><span class="file-chevron">↗</span></button><button class="file-action" id="import-pgn"><span data-icon="upload"></span><span>匯入 PGN／研究備份</span><span class="file-chevron">↗</span></button>
           <div class="right-copyright">CHESS ATELIER PRO <span>✦</span> OFFLINE 2026</div>
         </div>
       </aside>
@@ -140,7 +140,7 @@
   </div>
   <div class="modal-backdrop hidden" id="promotion-modal" role="dialog" aria-modal="true" aria-labelledby="promotion-title"><div class="modal-card promotion-card"><div class="eyebrow">PAWN PROMOTION</div><h2 id="promotion-title">選擇升變棋子</h2><p>兵抵達底線，選擇你要升變的棋子。</p><div class="promotion-options" id="promotion-options"></div><button class="text-button" id="promotion-cancel">取消</button></div></div>
   <div class="modal-backdrop hidden" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><div class="modal-card"><div class="eyebrow">CONFIRM ACTION</div><h2 id="confirm-title">確定要認輸？</h2><p id="confirm-text">此操作將結束目前對局。</p><div class="modal-actions"><button class="secondary-button" id="confirm-cancel">返回棋局</button><button class="primary-button" id="confirm-yes">確認</button></div></div></div>
-  <div class="modal-backdrop hidden" id="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title"><div class="modal-card import-card"><div class="eyebrow">IMPORT GAME</div><h2 id="import-title">匯入 PGN 棋譜</h2><p>貼上標準 PGN，將取代目前的對局並載入歷史著法。</p><textarea id="pgn-input" spellcheck="false" placeholder="[Event &quot;My Game&quot;]&#10;&#10;1. e4 e5 2. Nf3 Nc6 ..."></textarea><div class="import-error" id="import-error" aria-live="polite"></div><div class="modal-actions"><button class="secondary-button" id="import-cancel">取消</button><button class="primary-button" id="import-confirm">匯入棋譜</button></div></div></div>
+  <div class="modal-backdrop hidden" id="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title"><div class="modal-card import-card"><div class="eyebrow">IMPORT GAME</div><h2 id="import-title">匯入 PGN／研究備份</h2><p>貼上 PGN 或先前下載的完整研究備份 JSON。匯入將取代目前對局；完整研究備份可保留分支與標記。</p><textarea id="pgn-input" spellcheck="false" placeholder="[Event &quot;My Game&quot;]&#10;&#10;1. e4 e5 2. Nf3 Nc6 ..."></textarea><div class="import-error" id="import-error" aria-live="polite"></div><div class="modal-actions"><button class="secondary-button" id="import-cancel">取消</button><button class="primary-button" id="import-confirm">匯入棋譜</button></div></div></div>
   <div class="modal-backdrop main-menu-backdrop" id="main-menu-modal" role="dialog" aria-modal="true" aria-labelledby="menu-title">
     <div class="main-menu-card">
       <div class="main-menu-top">

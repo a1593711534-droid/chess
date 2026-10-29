@@ -3,10 +3,11 @@ export function moveToUci(m){return `${m.from}${m.to}${m.promotion||''}`;}
 export function pvToSan(fen,pv){
   if(!pv?.length)return '—';const game=new Chess(fen),result=[];
   for(const uci of pv.slice(0,10)){
-    try{const m=game.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||'q'});if(!m)break;
-      if(m.color==='w')result.push(`${Math.ceil(game.history().length/2)}. ${m.san}`);
-      else if(result.length&&/\. /.test(result.at(-1)))result[result.length-1]+=` ${m.san}`;
-      else result.push(`${Math.ceil(game.history().length/2)}... ${m.san}`);
+    try{const fullMove=Number(game.fen().split(' ')[5])||1;
+      const m=game.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||'q'});if(!m)break;
+      if(m.color==='w')result.push(`${fullMove}. ${m.san}`);
+      else if(result.length&&/\d+\. [^.]*/.test(result.at(-1)))result[result.length-1]+=` ${m.san}`;
+      else result.push(`${fullMove}... ${m.san}`);
     }catch{break;}
   }
   return result.join('  ')||'—';

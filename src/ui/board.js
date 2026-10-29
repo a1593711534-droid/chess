@@ -2,10 +2,15 @@ const PIECES={w:{k:'K',q:'Q',r:'R',b:'B',n:'N',p:'P'},b:{k:'K',q:'Q',r:'R',b:'B'
 export const pieceSrc=(type,color)=>`./assets/pieces/${color}${PIECES[color][type]}.svg`;
 const displayName={k:'國王',q:'皇后',r:'城堡',b:'主教',n:'騎士',p:'兵'};
 export function createBoard(container,onMove,onSelect,onAnnotate){
-  let selected=null,reverse=false,possible=[],hint=null,view=null,locked=false,dragging=null,marks=[],markStart=null;
+  let selected=null,reverse=false,possible=[],hint=null,view=null,locked=false,dragging=null,marks=[],markStart=null,annotationMode=false;
   function setSelection(square){selected=square;possible=square&&view?view.moves({square,verbose:true}).map(m=>m.to):[];onSelect?.(square);render();}
   function selectSquare(square){
     if(locked||!view)return;
+    if(annotationMode){
+      if(markStart){const from=markStart;markStart=null;onAnnotate?.(from,square);}
+      else markStart=square;
+      return;
+    }
     const piece=view.get(square);
     if(selected&&possible.includes(square)){
       const from=selected;selected=null;possible=[];onMove(from,square);return;
@@ -80,6 +85,7 @@ export function createBoard(container,onMove,onSelect,onAnnotate){
     update(game,{flipped=false,disabled=false,lastHint=null,annotations=[]}={}){view=game;reverse=flipped;locked=disabled;hint=lastHint;marks=annotations;selected=null;possible=[];render();},
     flip(){reverse=!reverse;render();},
     clearHint(){hint=null;render();},
+    setAnnotationMode(enabled){annotationMode=!!enabled;markStart=null;selected=null;possible=[];render();},
     render,
   };
 }

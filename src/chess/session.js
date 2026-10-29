@@ -55,7 +55,9 @@ export class ChessSession{
     return !this.status()&&this.atLatest&&(this.game.isThreefoldRepetition()||this.game.isDrawByFiftyMoves());
   }
   claimDraw(){
-    if(!this.canClaimDraw())return false;
+    // A draw claim cannot retroactively overrule a clock that has just flagged.
+    this.clock.tick();
+    if(!this.isHumanTurn()||!this.canClaimDraw())return false;
     this.result={winner:null,kind:this.game.isThreefoldRepetition()?'threefold-claim':'fifty-move-claim'};
     this.clock.pause();
     return true;

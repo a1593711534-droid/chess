@@ -58,6 +58,13 @@ with sync_playwright() as pw:
       page.locator('.square[data-square="g6"]').click();page.locator('.square[data-square="h6"]').click()
       assert '訓練完成' in page.locator('#game-status-title').inner_text()
       page.locator('#training-exit').click()
+      # Training must restore the board orientation that was active beforehand.
+      page.locator('#flip-btn').click()
+      original_top_left=page.locator('.square').first.get_attribute('data-square')
+      page.locator('#puzzle-library .library-card').first.click()
+      page.locator('#training-exit').click()
+      assert page.locator('.square').first.get_attribute('data-square')==original_top_left
+      page.locator('#flip-btn').click()
       page.locator('#main-menu-open').click();page.locator('#menu-new').click()
       page.locator('[data-mode="local"]').click();page.locator('#new-game').click()
       page.locator('.square[data-square="e2"]').click();page.locator('.square[data-square="e4"]').click()
@@ -66,6 +73,18 @@ with sync_playwright() as pw:
       page.locator('#save-note').click();page.locator('#create-variation').click()
       page.locator('.square[data-square="e7"]').click();page.locator('.square[data-square="e5"]').click()
       page.locator('#finish-variation').click()
+      assert page.locator('.variation-item').count()==1
+      # Export/import JSON backups with study branches and comments.
+      with page.expect_download() as download_info:
+        page.locator('#download-study').click()
+      backup=Path(download_info.value.path()).read_text(encoding='utf-8')
+      data=json.loads(backup)
+      assert data['format']=='chess-atelier-study-v1'
+      assert data['game']['study']['notes']['1']=='Centre control'
+      assert len(data['game']['study']['branches'])==1
+      page.locator('#import-pgn').click()
+      page.locator('#pgn-input').fill(backup)
+      page.locator('#import-confirm').click()
       assert page.locator('.variation-item').count()==1
       page.locator('#tab-analysis').click();assert page.locator('#multi-pv option').count()==3
       # Native drag-and-drop must reach the target square.
@@ -85,6 +104,12 @@ with sync_playwright() as pw:
       page.locator('[data-mobile="records"]').click()
       page.locator('#tab-openings').click()
       page.screenshot(path=str(ROOT/'PREVIEW_MOBILE_STUDY.png'))
+      page.locator('[data-mobile="board"]').click()
+      page.locator('#mobile-annotate-btn').click()
+      page.locator('.square[data-square="e2"]').click()
+      page.locator('.square[data-square="e4"]').click()
+      assert page.locator('#chessboard svg.board-annotations line').count()==1
+      page.locator('#mobile-annotate-btn').click()
     page.close()
   # Regression: a partly stale HTML with only #stop-analysis missing must recover
   # instead of throwing "Cannot set properties of null (setting onclick)".

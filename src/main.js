@@ -245,7 +245,7 @@ function startExercise(exercise){
   if(!training)clockBeforeTraining=suspendClockForStudy();
   if(!training)flippedBeforeTraining=flipped;
   training=new TrainingSession(exercise);trainingToken++;
-  lastHint=null;flipped=training.game.turn()==='b';render();closeDrawers();openRightPanel('training');toast(`訓練：${exercise.title}`,'info');
+  lastHint=null;flipped=training.game.turn()==='b';render();closeDrawers();toast(`訓練：${exercise.title}`,'info');
 }
 function exitTraining(restore=true){
   trainingToken++;training=null;
@@ -278,7 +278,7 @@ function variationMove(input){
 function beginVariation(){
   if(training){toast('請先離開訓練模式。','info');return;}
   cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
-  const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();openRightPanel('moves');toast('變例探索：現在可從此局面自由走棋。','info');
+  const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();closeDrawers();toast('變例探索：現在可從此局面自由走棋。','info');
 }
 function finishVariation(){
   if(!variation)return;
@@ -295,7 +295,7 @@ function openVariation(index){
   const branch=session.study.branches[index];if(!branch)return;
   cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
   const g=new Chess(branch.fen);for(const u of branch.moves)g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]});
-  variation={origin:branch.origin,fen:branch.fen,game:g,moves:[...branch.moves]};render();toast('已載入變例，可繼續探索；儲存後新增分支。','info');
+  variation={origin:branch.origin,fen:branch.fen,game:g,moves:[...branch.moves]};render();closeDrawers();toast('已載入變例，可繼續探索；儲存後新增分支。','info');
 }
 function makeMove(input,computer=false){
   cancelSearch();
@@ -387,7 +387,9 @@ function render(){
   $('stat-moves').textContent=String(session.ply).padStart(2,'0');$('stat-phase').textContent=computePhase();
   $('arena-type').textContent=training?'TACTICS ACADEMY':variation?'VARIATION STUDY':session.config.mode==='ai'?'STOCKFISH MATCH':'LOCAL TWO-PLAYER MATCH';
   $('round-caption').textContent=training?'離線訓練 · PRACTICE':variation?'自由變例 · SANDBOX':session.atLatest?'經典對局 · STANDARD CHESS':'歷史局面 · REPLAY MODE';
-  $('turn-message').textContent=display.title;
+  $('turn-message').textContent=training?`解題 · ${training.exercise.title}`:variation?'變例探索':display.title;
+  $('focus-return').classList.toggle('hidden',!training&&!variation);
+  $('focus-return').textContent=training?'結束練習':'結束變例';
   renderPlayers();renderMoves();renderAnalysis();renderOpenings();renderTraining();
   $('undo-btn').disabled=!training&&!variation&&session.ply===0;
   $('resign-btn').disabled=!!training||!!variation||session.done||session.ply===0;
@@ -656,6 +658,7 @@ function bindActions(){
   $('new-game').onclick=showNewGame;$('undo-btn').onclick=doUndo;$('flip-btn').onclick=flipBoard;
   $('mobile-undo-btn').onclick=doUndo;$('mobile-flip-btn').onclick=flipBoard;$('mobile-hint-btn').onclick=()=>analyze(true);
   $('mobile-annotate-btn').onclick=toggleMobileAnnotation;
+  $('focus-return').onclick=()=>{if(training)exitTraining();else if(variation)finishVariation();};
   $('sound-btn').onclick=()=>{prefs.sound=!prefs.sound;savePrefs(prefs);renderSettings();toast(prefs.sound?'音效已開啟':'音效已關閉','info');};
   $('resign-btn').onclick=doResign;
   $('nav-start').onclick=()=>navigate('first');$('nav-prev').onclick=()=>navigate('prev');$('nav-next').onclick=()=>navigate('next');$('nav-end').onclick=()=>navigate('last');

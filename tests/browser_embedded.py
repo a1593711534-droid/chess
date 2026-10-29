@@ -68,7 +68,18 @@ with sync_playwright() as pw:
       page.locator('#finish-variation').click()
       assert page.locator('.variation-item').count()==1
       page.locator('#tab-analysis').click();assert page.locator('#multi-pv option').count()==3
-      print('USER FLOW OK',flush=True)
+      # Native drag-and-drop must reach the target square.
+      page.locator('.square[data-square="e7"] .piece-image').drag_to(page.locator('.square[data-square="e5"]'))
+      assert page.locator('#moves-count').inner_text()=='2 PLIES'
+      page.locator('.square[data-square="e2"]').focus()
+      page.keyboard.press('ArrowRight')
+      assert page.evaluate("document.activeElement.dataset.square")=='f2'
+      # PGN that ends in a result without a checkmate should still be terminal.
+      page.locator('#import-pgn').click()
+      page.locator('#pgn-input').fill('[Event "Imported"]\\n\\n1. e4 e5 1-0')
+      page.locator('#import-confirm').click()
+      assert '白方勝利' in page.locator('#game-status-title').inner_text()
+      print('USER FLOW / DRAG / KEYBOARD / PGN OK',flush=True)
       assert not errs,errs
     if width==390:
       page.locator('[data-mobile="records"]').click()
@@ -131,5 +142,31 @@ with sync_playwright() as pw:
   assert toasts.count()==1,('repeat timeout toast',toasts.count())
   assert not errors,errors
   print('CHESS CLOCK UI REGRESSION: ONE TERMINAL NOTIFICATION',flush=True)
+  page.close()
+  # First-move clock and clock suspension through a study variation.
+  page=browser.new_page(viewport={'width':1440,'height':900})
+  page.clock.install()
+  page.set_content(html,wait_until='domcontentloaded')
+  page.wait_for_selector('.square',timeout=15000)
+  page.locator('[data-mode="local"]').click()
+  page.locator('#time-select').select_option('3+0')
+  page.locator('#new-game').click()
+  page.clock.fast_forward(6200)
+  page.clock.run_for(300)
+  before=page.locator('#bottom-clock').inner_text()
+  assert before!='03:00',('first move was not charged',before)
+  page.locator('#tab-moves').click()
+  page.locator('#create-variation').click()
+  page.clock.fast_forward(181000)
+  page.clock.run_for(300)
+  during=page.locator('#bottom-clock').inner_text()
+  assert during==before,('variation consumed game time',before,during)
+  page.locator('#finish-variation').click()
+  page.clock.fast_forward(2500)
+  page.clock.run_for(300)
+  after=page.locator('#bottom-clock').inner_text()
+  to_seconds=lambda v:int(v[:2])*60+int(v[3:])
+  assert to_seconds(after)<to_seconds(before),('clock did not resume',before,after)
+  print('FIRST MOVE / VARIATION PAUSE / RESUME OK',flush=True)
   page.close()
   browser.close()

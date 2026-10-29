@@ -6,9 +6,10 @@ const css=readFileSync(new URL('../styles/readability.css',import.meta.url),'utf
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const boot=readFileSync(new URL('../src/ui/boot.js',import.meta.url),'utf8');
 
-test('readability styles load last and use a new cache version',()=>{
+test('focus styles override readability and retain a versioned cache key',()=>{
   const all=[...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(x=>x[1]);
-  assert.match(all.at(-1),/readability\.css\?v=2\.3\.3/);
+  assert.match(all.at(-1),/focus\.css\?v=20261030/);
+  assert.ok(all.some(x=>/readability\.css\?v=2\.3\.3/.test(x)));
   assert.match(boot,/APP_VERSION='2\.3\.3'/);
   assert.match(html,/data-app-version="2\.3\.3"/);
 });

@@ -150,7 +150,7 @@ function openMainMenu(){
     $('main-menu-modal').classList.remove('hidden');
     (sessionActive?$('menu-continue'):$('new-game')).focus({preventScroll:true});
   }
-  setMenuEditing(!sessionActive);
+  setMenuEditing(true);
   updateSaveInfo();
   updateClocks();
 }
@@ -513,6 +513,7 @@ function toggleMobileAnnotation(){
   mobileAnnotating=!mobileAnnotating;
   board.setAnnotationMode(mobileAnnotating);
   $('mobile-annotate-btn').setAttribute('aria-pressed',String(mobileAnnotating));
+  $('focus-annotate').setAttribute('aria-pressed',String(mobileAnnotating));
   $('mobile-annotate-btn').textContent=mobileAnnotating?'完成標記':'標記';
 }
 function doResign(){
@@ -572,6 +573,18 @@ function importPgn(){
     savePrefs(prefs);renderSettings();closeModal('import-modal');
     sessionActive=true;render();save();toast(`已載入 ${session.ply} 步${isBackup?'研究備份':'棋譜'}。`);closeDrawers();
   }catch(e){$('import-error').textContent=`匯入失敗：${e.message||'PGN 格式不正確'}`;}
+}
+// Only a viewport breakpoint may change the permanent HUD's placement.
+ // Clicking a tab, selecting a mode, or opening study tools never resizes the board.
+function placeMatchHud(){
+  const docked=window.matchMedia('(min-width:780px)').matches;
+  const top=$('top-player-strip'),bottom=$('bottom-player-strip'),back=$('focus-return');
+  const topDest=docked?$('match-hud'):$('board-top-slot');
+  const bottomDest=docked?$('match-hud'):$('board-bottom-slot');
+  if(top.parentElement!==topDest)topDest.append(top);
+  if(bottom.parentElement!==bottomDest)bottomDest.append(bottom);
+  const returnDest=docked?$('focus-return-dock'):document.querySelector('.arena-mobile-actions');
+  if(back.parentElement!==returnDest)returnDest.append(back);
 }
 function closeDrawers(){
   $('setup-panel').classList.remove('mobile-visible');$('right-panel').classList.remove('mobile-visible');$('mobile-scrim').classList.add('hidden');
@@ -654,10 +667,15 @@ function bindActions(){
   $('main-menu-open').onclick=openMainMenu;$('mobile-main-menu').onclick=openMainMenu;
   $('menu-close').onclick=closeMainMenu;$('menu-continue').onclick=closeMainMenu;
   $('menu-new').onclick=()=>setMenuEditing(true);
+  $('menu-start-shortcut').onclick=showNewGame;
   $('menu-save').onclick=saveManual;$('save-game').onclick=saveManual;$('menu-load').onclick=loadManual;
   $('new-game').onclick=showNewGame;$('undo-btn').onclick=doUndo;$('flip-btn').onclick=flipBoard;
   $('mobile-undo-btn').onclick=doUndo;$('mobile-flip-btn').onclick=flipBoard;$('mobile-hint-btn').onclick=()=>analyze(true);
   $('mobile-annotate-btn').onclick=toggleMobileAnnotation;
+  $('focus-annotate').onclick=toggleMobileAnnotation;
+  $('focus-hint').onclick=()=>analyze(true);
+  $('focus-open-study').onclick=()=>openRightPanel('moves');
+  $('focus-open-analysis').onclick=()=>openRightPanel('analysis');
   $('focus-return').onclick=()=>{if(training)exitTraining();else if(variation)finishVariation();};
   $('sound-btn').onclick=()=>{prefs.sound=!prefs.sound;savePrefs(prefs);renderSettings();toast(prefs.sound?'音效已開啟':'音效已關閉','info');};
   $('resign-btn').onclick=doResign;
@@ -711,7 +729,7 @@ function bindActions(){
     if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){event.preventDefault();doUndo();}
     else if(event.key.toLowerCase()==='f'&&!event.ctrlKey&&!event.metaKey){flipBoard();}
   });
-  window.addEventListener('resize',()=>{if(window.innerWidth>1050)closeDrawers();});
+  window.addEventListener('resize',()=>{placeMatchHud();if(window.innerWidth>779)closeDrawers();});
 }
 
 function init(){
@@ -738,12 +756,12 @@ function startApplication(){
   }catch{invalidSave=true;}}
   // Random is a selection preference, not the resolved side stored in an old game.
   if(!['w','b','random'].includes(prefs.side))prefs.side='w';
-  renderSettings();bindActions();
+  renderSettings();bindActions();placeMatchHud();
   if(invalidSave)toast('自動存檔損毀，已保留原始資料。請使用手動存檔或備份恢復。','error');
   for(const category of CATEGORIES.slice(1)){$('puzzle-filter').add(new Option(category,category));}
   render();
   $('main-menu-modal').classList.remove('hidden');
-  setMenuEditing(!sessionActive);
+  setMenuEditing(true);
   updateSaveInfo();
   window.addEventListener('pagehide',()=>{clearTimeout(noteSaveTimer);save();});
   setInterval(()=>{

@@ -12,7 +12,7 @@ import {decorateIcons} from './utils/icons.js';
 import {OPENINGS,openingFor,continuations,openingGame} from './data/openings.js';
 import {PUZZLES,CATEGORIES,readTrainingStats,recordPuzzle} from './data/puzzles.js';
 import {TrainingSession} from './study/training.js';
-import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.3';
+import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.4';
 
 const $=id=>document.getElementById(id);
 let prefs=loadPrefs();
@@ -182,7 +182,7 @@ function loadManual(){
   const restore=()=>{
     try{
       // Validate the entire save before touching the active match.
-      const next=new ChessSession(manual.game.config);next.restore(manual.game,{resumeClock:false});
+      const next=new ChessSession(manual.game.config);next.restore(manual.game,{resumeClock:false,strictStudy:true});
       cancelSearch();session=next;
       sessionActive=true;menuPauseSide=manual.game.clock?.active||null;
       $('position-note').dataset.ply='';usingFallback=false;
@@ -209,8 +209,10 @@ function initialGame(){
   usingFallback=false;render();closeDrawers();closeMainMenu();save();
 }
 function showNewGame(){
-  if(sessionActive&&session.ply>0&&!session.done)showConfirm('開始新對局？','目前的對局將被新棋局取代。',initialGame,'開始新對局');
-  else initialGame();
+  const hasResearch=!!(Object.keys(session.study.notes).length||Object.keys(session.study.marks).length||session.study.branches.length);
+  if(sessionActive&&(session.ply>0||session.done||hasResearch)){
+    showConfirm('開始新對局？','目前的棋局與研究資料會被新棋局取代，請先下載完整研究備份。',initialGame,'確定開始新局');
+  }else initialGame();
 }
 function tryMove(from,to){
   if(training){const candidates=training.game.moves({square:from,verbose:true}).filter(m=>m.to===to);if(!candidates.length){toast('目前的訓練局面中這一步不合法。','info');return;}
@@ -277,13 +279,14 @@ function variationMove(input){
 }
 function beginVariation(){
   if(training){toast('請先離開訓練模式。','info');return;}
+  if(variation?.moves.length){toast('請先儲存目前變例，再建立新的分支。','info');return;}
   cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
   const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();closeDrawers();toast('變例探索：現在可從此局面自由走棋。','info');
 }
 function finishVariation(){
   if(!variation)return;
   if(variation.moves.length){try{
-    session.study.addBranch(variation.origin,variation.fen,variation.moves);
+    variation.persistedBranch=session.study.upsertBranch(variation.origin,variation.fen,variation.moves,variation.persistedBranch);
     if(save())toast('已儲存變例，可在棋譜頁面再次開啟。');
     else toast('變例僅保留在目前分頁，請立即下載完整研究備份。','error');
   }catch(e){toast(`變例尚未儲存：${e.message}。目前變例仍在，可先複製 PGN。`,'error');return;}}
@@ -314,7 +317,7 @@ function makeMove(input,computer=false){
     return;
   }
   lastHint=null;analysisInfo=null;analysisFen=null;
-  playSound(session.game.isGameOver()?'end':session.game.isCheck()?'check':move.captured?'capture':'move',prefs.sound);
+  playSound(session.done?'end':session.game.isCheck()?'check':move.captured?'capture':'move',prefs.sound);
   render();save();
   if(session.done){toast(gameOutcomeText(session.status()),'info');return;}
   if(!computer&&session.config.mode==='ai'&&!session.isHumanTurn())runBot();
@@ -345,17 +348,21 @@ async function runBot(){
   }else{toast('電腦無法取得合法著法，可使用悔棋或重新開始。','error');render();}
 }
 
-function doUndo(){
+function doUndo(confirmed=false){
   if(training){trainingToken++;training.restart();render();return;}
   if(variation){if(variation.moves.length){variation.moves.pop();variation.game.undo();render();}return;}
   if(session.ply===0)return;
+  if(!confirmed&&session.study.hasResearchAfter(session.undoTargetPly())){
+    showConfirm('悔棋會移除研究資料','被撤回著法上的註解、標記及其後的變例將被移除。請先下載完整研究備份，或取消操作。',()=>doUndo(true),'確定悔棋');
+    return;
+  }
   cancelSearch();const n=session.undo();analysisInfo=null;analysisFen=null;lastHint=null;
   if(n){render();save();toast(`已退回 ${n} 步。`,'info');}
   if(session.config.mode==='ai'&&!session.isHumanTurn()&&!session.done)runBot();
 }
 function gameOutcomeText(outcome){
   if(!outcome)return '';
-  const why={timeout:'時間用盡',checkmate:'將死',resign:'認輸',stalemate:'逼和',threefold:'三次重複局面',insufficient:'子力不足',draw:'和棋',pgn:'棋譜記錄結果'}[outcome.kind]||'和棋';
+  const why={timeout:'時間用盡', 'timeout-insufficient':'時間用盡，但對手無法將死',checkmate:'將死',resign:'認輸',stalemate:'逼和','threefold-claim':'主張三次重複和棋','fifty-move-claim':'主張50步和棋',fivefold:'五次重複局面','seventyfive-move':'75步規則',insufficient:'子力不足',draw:'和棋',pgn:'棋譜記錄結果'}[outcome.kind]||'和棋';
   if(!outcome.winner)return `和棋 · ${why}`;
   return `${outcome.winner==='w'?'白方':'黑方'}勝利 · ${why}`;
 }
@@ -393,6 +400,7 @@ function render(){
   renderPlayers();renderMoves();renderAnalysis();renderOpenings();renderTraining();
   $('undo-btn').disabled=!training&&!variation&&session.ply===0;
   $('resign-btn').disabled=!!training||!!variation||session.done||session.ply===0;
+  $('claim-draw').disabled=!!training||!!variation||!sessionActive||!session.isHumanTurn()||!session.canClaimDraw();
   updateClocks();
 }
 function renderPlayers(){
@@ -670,8 +678,8 @@ function bindActions(){
   $('menu-start-shortcut').onclick=showNewGame;
   $('menu-import').onclick=()=>{$('pgn-input').value='';$('import-error').textContent='';openModal('import-modal');};
   $('menu-save').onclick=saveManual;$('save-game').onclick=saveManual;$('menu-load').onclick=loadManual;
-  $('new-game').onclick=showNewGame;$('undo-btn').onclick=doUndo;$('flip-btn').onclick=flipBoard;
-  $('mobile-undo-btn').onclick=doUndo;$('mobile-flip-btn').onclick=flipBoard;$('mobile-hint-btn').onclick=()=>analyze(true);
+  $('new-game').onclick=showNewGame;$('undo-btn').onclick=()=>doUndo();$('flip-btn').onclick=flipBoard;
+  $('mobile-undo-btn').onclick=()=>doUndo();$('mobile-flip-btn').onclick=flipBoard;$('mobile-hint-btn').onclick=()=>analyze(true);
   $('mobile-annotate-btn').onclick=toggleMobileAnnotation;
   $('focus-annotate').onclick=toggleMobileAnnotation;
   $('focus-hint').onclick=()=>analyze(true);
@@ -680,6 +688,12 @@ function bindActions(){
   $('focus-return').onclick=()=>{if(training)exitTraining();else if(variation)finishVariation();};
   $('sound-btn').onclick=()=>{prefs.sound=!prefs.sound;savePrefs(prefs);renderSettings();toast(prefs.sound?'音效已開啟':'音效已關閉','info');};
   $('resign-btn').onclick=doResign;
+  $('claim-draw').onclick=()=>{
+    if(!session.isHumanTurn())return;
+    session.clock.snapshot();
+    if(!session.claimDraw())return;
+    cancelSearch();render();save();playSound('end',prefs.sound);toast('已依棋規主張和棋。','success');
+  };
   $('nav-start').onclick=()=>navigate('first');$('nav-prev').onclick=()=>navigate('prev');$('nav-next').onclick=()=>navigate('next');$('nav-end').onclick=()=>navigate('last');
   document.querySelectorAll('.panel-tab').forEach(b=>b.onclick=()=>openRightPanel(b.dataset.tab));
   $('analyze-btn').onclick=()=>analyze(false);$('hint-btn').onclick=()=>analyze(true);
@@ -751,7 +765,10 @@ function init(){
 }
 function startApplication(){
   const {value:saved,corrupted}=inspectSavedGame();let invalidSave=corrupted;
-  if(saved){try{session.restore(saved,{resumeClock:false});sessionActive=true;
+  if(saved){try{
+    // Parse the entire save into a temporary session before replacing live state.
+    const next=new ChessSession(saved.config);next.restore(saved,{resumeClock:false,strictStudy:true});
+    session=next;sessionActive=true;
     menuPauseSide=saved.clock?.active||null;
     prefs={...prefs,...saved.config,side:prefs.side==='random'?'random':saved.config.side};flipped=session.config.mode==='ai'&&session.config.side==='b';
   }catch{invalidSave=true;}}

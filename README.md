@@ -1,3 +1,12 @@
+## v2.3.0 · Enlarged, readable and stable main menu
+
+- The desktop menu grows to up to 1280px wide × 820px tall (over 1.5× its previous ~840px width at 1648px viewport width).
+- The outer menu frame has viewport-clamped fixed dimensions. Switching between AI/local play, fixed/adaptive time, active match and new-game editing no longer changes its size.
+- If the contents exceed the viewport, menu panels scroll inside the fixed frame; tablet/mobile use an internal stacked scroller.
+- Text and control sizes have been increased throughout the game, including menu selections, clocks, move history, analysis and notes.
+- New styles/readability.css is loaded last; the underlying chess logic and save schema are unchanged.
+- Smoke-tested at eight viewport sizes in Chromium with new/locked/editing flows; static tests validate stylesheet loading and layout contracts.
+
 ## v2.2.0 · Professional Stockfish time management
 
 - Skill Level (0–20), the **chess clock**, and **AI time-management policy** are independent and locked when a match begins.

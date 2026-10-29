@@ -1,3 +1,11 @@
+## v2.3.0 — Larger interface and fixed-size main menu
+
+- Expanded desktop main menu to 1280px on typical large displays, with responsive viewport-safe limits.
+- Fixed the menu's outer width and height across game creation and setup state changes.
+- Increased typography and control sizing across the game for easier reading.
+- Improved save panel density so the create another match control remains visible at common laptop heights.
+- Added browser interaction checks and layout regression tests.
+
 ## v2.2.0 — Professional AI time controls
 
 - Added Stockfish clock-aware time allocation (remaining time and increment), independent of Skill Level.

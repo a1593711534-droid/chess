@@ -11,7 +11,7 @@ export function buildGoCommand({movetime=900,clock=null,depth=0}={}){
 export class EngineClient{
   constructor(onState=()=>{}){
     this.onState=onState;this.worker=null;this.state='loading';this.pending=null;this.token=0;
-    this.newGamePending=true;this.optionsInitialized=false;this.readyWaiter=null;
+    this.newGamePending=true;this.optionsInitialized=false;this.readyWaiter=null;this.setupPromise=null;
     this.readyPromise=new Promise((resolve,reject)=>{this.resolveReady=resolve;this.rejectReady=reject;});
     this.readyPromise.catch(()=>{}); // avoid an unhandled rejection if nobody requests the engine
     this.readyTimeout=setTimeout(()=>this.fail(new Error('引擎載入逾時，請確認 WASM 檔案完整。')),90000);
@@ -29,7 +29,7 @@ export class EngineClient{
     if(msg==='readyok'){
       if(this.state==='loading'){
         clearTimeout(this.readyTimeout);this.state='ready';this.resolveReady();this.onState('ready');
-      }else if(this.readyWaiter){const done=this.readyWaiter;this.readyWaiter=null;done();}
+      }else if(this.readyWaiter){const done=this.readyWaiter;this.readyWaiter=null;this.setupPromise=null;done();}
       return;
     }
     if(msg.startsWith('info ')&&this.pending){
@@ -44,7 +44,7 @@ export class EngineClient{
   fail(error){
     if(this.state==='error')return;
     clearTimeout(this.readyTimeout);this.state='error';this.onState('error',error);
-    if(this.readyWaiter){const done=this.readyWaiter;this.readyWaiter=null;done();}
+    if(this.readyWaiter){const done=this.readyWaiter;this.readyWaiter=null;this.setupPromise=null;done();}
     this.rejectReady?.(error);if(this.pending){clearTimeout(this.pending.timer);clearTimeout(this.pending.cancelTimer);this.pending.resolve(null);this.pending=null;}
     this.worker?.terminate();this.worker=null;
   }
@@ -68,10 +68,15 @@ export class EngineClient{
     if(!this.optionsInitialized){
       this.post('setoption name Hash value 64');this.optionsInitialized=true;
     }
-    if(this.newGamePending){
-      this.newGamePending=false;
-      this.post('ucinewgame');this.post('isready');
-      await new Promise(resolve=>{this.readyWaiter=resolve;});
+    while(this.newGamePending||this.setupPromise){
+      if(!this.setupPromise){
+        this.newGamePending=false;
+        // Install the waiter before posting isready to avoid missing the reply.
+        this.setupPromise=new Promise(resolve=>{this.readyWaiter=resolve;});
+        this.post('ucinewgame');this.post('isready');
+      }
+      const setup=this.setupPromise;
+      await setup;
       if(request!==this.token||this.state==='error')return null;
     }
     this.post(`setoption name Skill Level value ${skill}`);

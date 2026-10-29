@@ -12,7 +12,7 @@ import {decorateIcons} from './utils/icons.js';
 import {OPENINGS,openingFor,continuations,openingGame} from './data/openings.js';
 import {PUZZLES,CATEGORIES,readTrainingStats,recordPuzzle} from './data/puzzles.js';
 import {TrainingSession} from './study/training.js';
-import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.1';
+import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.2';
 
 const $=id=>document.getElementById(id);
 let prefs=loadPrefs();
@@ -176,9 +176,10 @@ function loadManual(){
   const restore=()=>{
     try{cancelSearch();session=new ChessSession(manual.game.config);session.restore(manual.game,{resumeClock:false});
       sessionActive=true;menuPauseSide=manual.game.clock?.active||null;
+      $('position-note').dataset.ply='';usingFallback=false;
       prefs={...prefs,...manual.game.config,side:prefs.side==='random'?'random':manual.game.config.side};renderSettings();
       flipped=session.config.mode==='ai'&&session.config.side==='b';
-      variation=null;training=null;clockBeforeVariation=null;clockBeforeTraining=null;lastHint=null;render();save();closeMainMenu();toast('已載入手動存檔。');
+      variation=null;training=null;flippedBeforeTraining=null;clockBeforeVariation=null;clockBeforeTraining=null;lastHint=null;render();save();closeMainMenu();toast('已載入手動存檔。');
     }catch(error){toast('存檔損毀，無法讀取：'+error.message,'error');}
   };
   if(sessionActive&&!session.done)showConfirm('載入手動存檔？','目前棋局會被手動存檔取代。',restore,'載入');

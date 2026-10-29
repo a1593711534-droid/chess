@@ -18,12 +18,12 @@ test('PV notation honors non-default FEN fullmove number',()=>{
   const fen='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 17';
   assert.equal(pvToSan(fen,['e7e5','e2e4']),'17... e5  18. e4');
 });
-test('50 branches roundtrip and 51st branch is rejected before misleading success',()=>{
+test('older saves with more than 50 branches survive reload',()=>{
   const book=new StudyBook(),game=new ChessSession(prefs),fen=game.game.fen();
   for(let i=0;i<50;i++)book.addBranch(0,fen,['e2e4']);
   assert.equal(book.serialize().branches.length,50);
-  assert.throws(()=>book.addBranch(0,fen,['d2d4']),/50/);
-  assert.equal(new StudyBook(JSON.parse(JSON.stringify(book.serialize()))).branches.length,50);
+  book.addBranch(0,fen,['d2d4']);
+  assert.equal(new StudyBook(JSON.parse(JSON.stringify(book.serialize()))).branches.length,51);
 });
 test('full study data roundtrip retains notes, annotations and variations',()=>{
   const game=new ChessSession(prefs);game.play('e4');

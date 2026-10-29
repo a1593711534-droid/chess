@@ -13,7 +13,7 @@
   --shadow:0 18px 60px #1b302015;
   font-family:Inter,"Noto Sans TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
   background:var(--bg);color:var(--text);
-  --focus-board:min(820px,calc(100dvh - 198px),calc(100vw - 28px));
+  --focus-board:min(820px,calc(100dvh - 244px),calc(100vw - 28px));
 }
 html,body{background:var(--bg);color:var(--text)}
 .app-shell{background:var(--bg);color:var(--text);overflow:hidden}

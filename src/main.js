@@ -553,16 +553,17 @@ function importPgn(){
   try{
     const text=$('pgn-input').value.trim();if(!text)throw new Error('請先貼上 PGN 棋譜。');
     const isBackup=text.startsWith('{')&&text.includes('"chess-atelier-study-v1"');
-    let next;
+    let next,importedActiveSide=null;
     if(isBackup){
       const data=JSON.parse(text);
       if(data.format!=='chess-atelier-study-v1'||!data.game||typeof data.game.config!=='object')throw Error('研究備份格式無效');
       next=new ChessSession(data.game.config);
       next.restore(data.game,{resumeClock:!menuVisible(),strictStudy:true});
+      importedActiveSide=data.game.clock?.active||null;
     }else{next=new ChessSession({...prefs,mode:'local',time:'none'});next.importPgn(text);}
     cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=next;
     $('position-note').dataset.ply='';flipped=isBackup&&session.config.mode==='ai'&&session.config.side==='b';
-    menuPauseSide=isBackup&&menuVisible()?data.game.clock?.active||null:null;
+    menuPauseSide=isBackup&&menuVisible()?importedActiveSide:null;
     usingFallback=false;lastHint=null;analysisInfo=null;analysisFen=null;
     if(mobileAnnotating){mobileAnnotating=false;board.setAnnotationMode(false);$('mobile-annotate-btn').setAttribute('aria-pressed','false');$('mobile-annotate-btn').textContent='標記';}
     prefs={...prefs,...next.config,side:isBackup?next.config.side:prefs.side,mode:next.config.mode,time:next.config.time};

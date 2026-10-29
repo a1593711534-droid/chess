@@ -611,6 +611,9 @@ function init(){
     createGameBoard();
     $('engine-status').textContent='Stockfish 19 · 按需載入';
     startApplication();
+    if('serviceWorker' in navigator&&window.isSecureContext){
+      navigator.serviceWorker.register('./sw.js').catch(error=>console.warn('[Chess Atelier] Offline cache unavailable:',error));
+    }
   }catch(error){
     console.error('[Chess Atelier PRO] Fatal initialization failure:',error);
     showStartupError(document,{reason:'runtime',missing:[error.message||String(error)]});

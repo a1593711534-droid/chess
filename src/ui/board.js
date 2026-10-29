@@ -1,15 +1,30 @@
 const PIECES={w:{k:'K',q:'Q',r:'R',b:'B',n:'N',p:'P'},b:{k:'K',q:'Q',r:'R',b:'B',n:'N',p:'P'}};
 export const pieceSrc=(type,color)=>`./assets/pieces/${color}${PIECES[color][type]}.svg`;
 const displayName={k:'國王',q:'皇后',r:'城堡',b:'主教',n:'騎士',p:'兵'};
-export function createBoard(container,onMove,onSelect,onAnnotate){
+export function createBoard(container,onMove,onSelect,onAnnotate,onStatus){
   let selected=null,reverse=false,possible=[],hint=null,view=null,locked=false,dragging=null,marks=[],markStart=null,annotationMode=false;
-  function setSelection(square){selected=square;possible=square&&view?view.moves({square,verbose:true}).map(m=>m.to):[];onSelect?.(square);render();}
+  function announce(message){onStatus?.(message);}
+  function setSelection(square){
+    selected=square;possible=square&&view?view.moves({square,verbose:true}).map(m=>m.to):[];
+    onSelect?.(square);
+    if(square){
+      const p=view.get(square);
+      announce(`已選取 ${square} ${p?.color==='w'?'白方':'黑方'}${displayName[p?.type]||'棋子'}。${possible.length?'合法落點：'+possible.join('、'):'沒有合法落點'}。`);
+    }else announce('已取消選取棋子。');
+    render();
+  }
   function selectSquare(square){
     if(!view)return;
     // Annotations must remain available when the history board is read-only.
     if(annotationMode){
-      if(markStart){const from=markStart;markStart=null;onAnnotate?.(from,square);}
-      else markStart=square;
+      if(markStart){
+        const from=markStart;markStart=null;onAnnotate?.(from,square);
+        announce(from===square?`已切換 ${square} 的圓圈標記。`:`已切換 ${from} 到 ${square} 的箭頭標記。`);
+      }else{
+        markStart=square;
+        announce(`標記起點 ${square} 已選取。再點選一格畫箭頭、再次點選原格畫圓圈，或按 Escape 取消。`);
+      }
+      render();
       return;
     }
     if(locked)return;
@@ -32,13 +47,20 @@ export function createBoard(container,onMove,onSelect,onAnnotate){
       const button=document.createElement('button');button.type='button';button.dataset.square=sq;
       button.className=`square ${(r+c)%2===0?'light':'dark'}`;
       if(sq===selected)button.classList.add('selected');
+      if(annotationMode&&sq===markStart)button.classList.add('annotation-start');
       if(last&&(sq===last.from||sq===last.to))button.classList.add('last-move');
       if(sq===check)button.classList.add('in-check');
       if(hint&&(sq===hint.from||sq===hint.to))button.classList.add(sq===hint.from?'hint-from':'hint-to');
       if(possible.includes(sq))button.classList.add('possible');
       if(p&&possible.includes(sq))button.classList.add('occupied');
       button.tabIndex=(focusedSquare||selected||(reverse?'e8':'e1'))===sq?0:-1;
-       button.setAttribute('aria-label',`${sq}${p?` ${p.color==='w'?'白方':'黑方'}${displayName[p.type]}`:''}`);
+      const details=[sq,p?`${p.color==='w'?'白方':'黑方'}${displayName[p.type]}`:'空格'];
+      if(sq===selected)details.push('已選取');
+      if(possible.includes(sq))details.push('合法落點');
+      if(annotationMode&&sq===markStart)details.push('標記起點');
+      if(sq===check)details.push('被將軍');
+      button.setAttribute('aria-label',details.join('，'));
+      button.setAttribute('aria-pressed',String(sq===selected||(annotationMode&&sq===markStart)));
       if(p){const image=document.createElement('img');image.className='piece-image';image.alt='';image.draggable=!annotationMode&&!locked&&p.color===view.turn();image.src=pieceSrc(p.type,p.color);
         image.addEventListener('dragstart',e=>{if(annotationMode||locked||p.color!==view.turn()){e.preventDefault();return;}dragging=sq;selected=sq;possible=view.moves({square:sq,verbose:true}).map(m=>m.to);
            onSelect?.(sq);button.classList.add('selected');
@@ -52,6 +74,11 @@ export function createBoard(container,onMove,onSelect,onAnnotate){
       if(r===7){const file=document.createElement('span');file.className='coord file';file.textContent=files[c];button.append(file);}
       button.addEventListener('click',()=>selectSquare(sq));
        button.addEventListener('keydown',event=>{
+         if(event.key==='Escape'&&(selected||markStart)){
+           event.preventDefault();event.stopPropagation();
+           selected=null;possible=[];markStart=null;
+           announce('已取消棋盤選取或標記起點。');render();return;
+         }
          const delta={ArrowLeft:[0,-1],ArrowRight:[0,1],ArrowUp:[-1,0],ArrowDown:[1,0]}[event.key];
          if(!delta)return;
          event.preventDefault();const nr=r+delta[0],nc=c+delta[1];
@@ -62,7 +89,10 @@ export function createBoard(container,onMove,onSelect,onAnnotate){
        });
       button.addEventListener('contextmenu',e=>e.preventDefault());
       button.addEventListener('pointerdown',e=>{if(e.button===2)markStart=sq;});
-      button.addEventListener('pointerup',e=>{if(e.button===2&&markStart){onAnnotate?.(markStart,sq);markStart=null;}});
+      button.addEventListener('pointerup',e=>{if(e.button===2&&markStart){
+        const from=markStart;markStart=null;onAnnotate?.(from,sq);
+        announce(`已切換 ${from} 到 ${sq} 的標記。`);
+      }});
       button.addEventListener('dragover',e=>{if(!annotationMode&&!locked&&dragging&&possible.includes(sq)){e.preventDefault();e.dataTransfer.dropEffect='move';button.classList.add('drag-target');}});
       button.addEventListener('dragleave',()=>button.classList.remove('drag-target'));
       button.addEventListener('drop',e=>{e.preventDefault();button.classList.remove('drag-target');if(!annotationMode&&!locked&&dragging){const from=dragging;dragging=null;if(from&&possible.includes(sq)){selected=null;possible=[];onMove(from,sq);}else setSelection(null);}});
@@ -87,7 +117,12 @@ export function createBoard(container,onMove,onSelect,onAnnotate){
     update(game,{flipped=false,disabled=false,lastHint=null,annotations=[]}={}){view=game;reverse=flipped;locked=disabled;hint=lastHint;marks=annotations;selected=null;possible=[];render();},
     flip(){reverse=!reverse;render();},
     clearHint(){hint=null;render();},
-    setAnnotationMode(enabled){annotationMode=!!enabled;markStart=null;selected=null;possible=[];render();},
+    setAnnotationMode(enabled){
+      annotationMode=!!enabled;markStart=null;selected=null;possible=[];
+      announce(annotationMode?'標記模式開啟。先選起點，再選終點；同格可畫圓圈。按 Escape 可取消。':'標記模式已關閉。');
+      render();
+    },
+    cancelPending(){if(!selected&&!markStart)return false;selected=null;markStart=null;possible=[];announce('已取消棋盤選取。');render();return true;},
     render,
   };
 }

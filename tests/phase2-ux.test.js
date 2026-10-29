@@ -51,5 +51,5 @@ test('analysis labels, roving tabs and bundled offline assets cover all new feat
   assert.match(app,/button\.onkeydown=event=>/);
   assert.match(app,/b\.tabIndex=active\?0:-1/);
   assert.match(sw,/src\/ui\/evaluation\.js/);
-  assert.match(sw,/styles\/ux-phase2\.css/);
+  assert.match(sw,/styles\/experience\.css/);
 });

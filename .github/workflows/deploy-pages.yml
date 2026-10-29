@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'index.html'
+      - 'sw.js'
       - 'src/**'
       - 'styles/**'
       - 'assets/**'
@@ -38,14 +39,16 @@ jobs:
           python -m pip install playwright==1.56.0
           python -m playwright install --with-deps chromium
           python tests/browser_embedded.py
+          python tests/browser_offline.py
       - name: Assemble static Pages website
         if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p _site
-          cp -R index.html src styles assets vendor licenses THIRD_PARTY_NOTICES.md _site/
+          cp -R index.html sw.js src styles assets vendor licenses THIRD_PARTY_NOTICES.md _site/
           test -f _site/index.html
+          test -f _site/sw.js
           test -f _site/src/main.js
           test -f _site/vendor/stockfish-19-single.js
           curl --fail --show-error --silent --location --retry 3 --retry-delay 3 \

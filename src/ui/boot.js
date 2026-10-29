@@ -11,6 +11,7 @@ export const REQUIRED_IDS=[
   'download-study','mobile-annotate-btn','promotion-modal','import-modal',
   'focus-match','focus-close-match','focus-return',
   'match-hud','board-top-slot','board-bottom-slot','focus-return-dock',
+  'top-player-strip','bottom-player-strip',
   'focus-open-study','focus-open-analysis','focus-hint','focus-annotate','menu-start-shortcut',
   'active-match-detail','active-match-summary','ai-time-mode','ai-time-mode-section','ai-time-note','ai-think-label','ai-think-section','ai-think-select','analysis-state',
   'analysis-time','analyze-btn','arena-type','chessboard','close-records',

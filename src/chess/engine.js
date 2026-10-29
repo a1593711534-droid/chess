@@ -33,18 +33,22 @@ export class EngineClient{
       if((cp||mate||pv)&&this.pending.info){this.pending.info({cp:cp?Number(cp[1]):null,mate:mate?Number(mate[1]):null,depth:depth?Number(depth[1]):0,multiPV:multi?Number(multi[1]):1,pv:pv?pv[1].split(/\s+/):[]});}
     }
     if(msg.startsWith('bestmove ')&&this.pending){
-      const move=msg.split(/\s+/)[1];const task=this.pending;this.pending=null;clearTimeout(task.timer);
+      const move=msg.split(/\s+/)[1];const task=this.pending;this.pending=null;clearTimeout(task.timer);clearTimeout(task.cancelTimer);
       this.state='ready';this.onState('ready');task.resolve(task.cancelled?null:(move&&move!=='(none)'?move:null));
     }
   }
   fail(error){
     if(this.state==='error')return;
     clearTimeout(this.readyTimeout);this.state='error';this.onState('error',error);
-    this.rejectReady?.(error);if(this.pending){clearTimeout(this.pending.timer);this.pending.resolve(null);this.pending=null;}
+    this.rejectReady?.(error);if(this.pending){clearTimeout(this.pending.timer);clearTimeout(this.pending.cancelTimer);this.pending.resolve(null);this.pending=null;}
     this.worker?.terminate();this.worker=null;
   }
   cancel(){
-    this.token++;if(this.pending&&!this.pending.cancelled){this.pending.cancelled=true;this.post('stop');}
+    this.token++;if(this.pending&&!this.pending.cancelled){
+      this.pending.cancelled=true;this.post('stop');
+      // Workers occasionally ignore UCI stop. Recover instead of blocking new searches.
+      this.pending.cancelTimer=setTimeout(()=>this.fail(new Error('引擎停止搜尋逾時，請重試。')),3500);
+    }
   }
   async search(fen,{movetime=900,clock=null,skill=20,multiPV=1,depth=0,onInfo=()=>{}}={}){
     const request=++this.token;

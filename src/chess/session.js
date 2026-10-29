@@ -84,15 +84,15 @@ export class ChessSession{
     this.config.mode='local';this.config.time='none';this.clock=new ChessClock('none');this.clockSnapshots=[];
   }
   serialize(){return {version:1,config:this.config,initialFen:this.initialFen,headers:this.headers,moves:this.moves.map(m=>m.san),result:this.result,clock:this.clock.snapshot(),clockSnapshots:this.clockSnapshots,study:this.study.serialize()};}
-  restore(saved,{resumeClock=true,accountElapsed=false}={}){
-    if(!saved||saved.version!==1||!Array.isArray(saved.moves)||saved.moves.length>2000)throw Error('Invalid saved game');
+  restore(saved,{resumeClock=true,accountElapsed=false,strictStudy=false}={}){
+    if(!saved||saved.version!==1||!saved.config||typeof saved.config!=='object'||Array.isArray(saved.config)||!Array.isArray(saved.moves)||saved.moves.length>2000)throw Error('Invalid saved game');
     this.configure(saved.config);
     if(!this.config.aiThink)this.config.aiThink=String(resolveLevel(this.config.level).movetime);
     // Old saves used fixed time; do not silently reinterpret them.
     this.config.aiTimeMode=normalizeAiTimeMode(saved.config.aiTimeMode);
     this.initialFen=saved.initialFen||DEFAULT_POSITION;this.headers=saved.headers||{};this.game=new Chess(this.initialFen);
     saved.moves.forEach(san=>this.game.move(san,{strict:true}));
-    this.cursor=this.ply;this.lastMove=this.moves.at(-1)||null;this.result=saved.result||null;this.study=new StudyBook(saved.study);
+    this.cursor=this.ply;this.lastMove=this.moves.at(-1)||null;this.result=saved.result||null;this.study=new StudyBook(saved.study,{strict:strictStudy});
     this.clockSnapshots=Array.isArray(saved.clockSnapshots)?saved.clockSnapshots:[];
     this.clock.restore(saved.clock,{resume:resumeClock,accountElapsed});
     if(this.result||this.game.isGameOver())this.clock.pause();

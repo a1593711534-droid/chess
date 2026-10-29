@@ -22,7 +22,10 @@ for file in MODULES:
         code=code.replace('export const pieceSrc=(type,color)=>`./assets/pieces/${color}${PIECES[color][type]}.svg`;',"export const pieceSrc=(type,color)=>({IMAGE_DATA})[color+PIECES[color][type]];".replace('{IMAGE_DATA}',json.dumps(image_urls)))
     modules[key(file)]='data:text/javascript;base64,'+base64.b64encode(code.encode()).decode()
 html=(ROOT/'index.html').read_text()
-css='\n'.join((ROOT/'styles'/n).read_text() for n in ['base.css','layout.css','board.css','mobile.css','pro.css','viewport.css','main-menu.css','readability.css','focus.css','experience.css'])
+# Match the actual stylesheet links rather than a stale hard-coded list.
+css_files=re.findall(r'<link rel="stylesheet" href="\./styles/([^"?]+)',html)
+assert css_files and len(css_files)==len(set(css_files)),css_files
+css='\n'.join((ROOT/'styles'/n).read_text() for n in css_files)
 html=re.sub(r'<link rel="stylesheet"[^>]*>', '',html)
 html=re.sub(r'<script type="module" src="./src/main\.js(?:\?v=[^"]+)?"></script>', '',html)
 html=html.replace('</head>',f'<style>{css}</style><script type="importmap">'+json.dumps({'imports':modules})+'</script></head>')

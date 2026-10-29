@@ -76,7 +76,7 @@ with sync_playwright() as pw:
       assert page.evaluate("document.activeElement.dataset.square")=='f2'
       # PGN that ends in a result without a checkmate should still be terminal.
       page.locator('#import-pgn').click()
-      page.locator('#pgn-input').fill('[Event "Imported"]\\n\\n1. e4 e5 1-0')
+      page.locator('#pgn-input').fill('[Event "Imported"]\n\n1. e4 e5 1-0')
       page.locator('#import-confirm').click()
       assert '白方勝利' in page.locator('#game-status-title').inner_text()
       print('USER FLOW / DRAG / KEYBOARD / PGN OK',flush=True)

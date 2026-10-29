@@ -58,6 +58,13 @@ try:
         page.locator('.square[data-square="e2"]').click()
         page.locator('.square[data-square="e4"]').click()
         assert page.locator('#moves-count').inner_text()=='1 PLIES'
+        # Auto and manual save status are verifiable with real same-origin storage.
+        assert '自動儲存成功' in page.locator('#save-status').inner_text()
+        auto=page.evaluate("JSON.parse(localStorage.getItem('chess-atelier-game-v1'))")
+        assert auto.get('savedAt'), 'autosave timestamp was not written'
+        page.locator('#save-game').click()
+        assert '手動存檔成功' in page.locator('#save-status').inner_text()
+        assert page.evaluate("Boolean(JSON.parse(localStorage.getItem('chess-atelier-manual-save-v1')).date)")
         page.evaluate('''() => {
           const game=JSON.parse(localStorage.getItem('chess-atelier-game-v1'));
           game.moves=['illegal'];

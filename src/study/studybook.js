@@ -20,7 +20,43 @@ export class StudyBook{
   }
   setNote(ply,text){const key=String(ply);if(typeof text!=='string')return;if(text.trim())this.notes[key]=text.trim().slice(0,500);else delete this.notes[key];}
   toggleMark(ply,from,to){const key=String(ply),list=this.marks[key]||[];const found=list.findIndex(m=>m.from===from&&m.to===to);if(found>=0)list.splice(found,1);else list.push({from,to});this.marks[key]=list.slice(-24);}
-  addBranch(origin,fen,moves){if(!Number.isInteger(origin)||origin<0||origin>2000||typeof fen!=='string'||!Array.isArray(moves)||moves.length>160)throw Error('Invalid variation');const g=new Chess(fen);const normalized=[];for(const u of moves){if(!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(u))throw Error('Invalid variation move');const m=g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]},{strict:true});normalized.push(`${m.from}${m.to}${m.promotion||''}`);}const branch={origin,fen,moves:normalized};this.branches.push(branch);return branch;}
+  validateBranch(origin,fen,moves){
+    if(!Number.isInteger(origin)||origin<0||origin>2000||typeof fen!=='string'||!Array.isArray(moves)||moves.length>160)throw Error('Invalid variation');
+    const g=new Chess(fen),normalized=[];
+    for(const u of moves){
+      if(typeof u!=='string'||!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(u))throw Error('Invalid variation move');
+      const m=g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]},{strict:true});
+      normalized.push(`${m.from}${m.to}${m.promotion||''}`);
+    }
+    return {origin,fen,moves:normalized};
+  }
+  addBranch(origin,fen,moves){
+    const branch=this.validateBranch(origin,fen,moves);
+    this.branches.push(branch);
+    return branch;
+  }
+  /** Retry a failed persistence without appending a second copy of the same edit. */
+  upsertBranch(origin,fen,moves,existing=null){
+    const candidate=this.validateBranch(origin,fen,moves);
+    if(existing&&this.branches.includes(existing)){
+      Object.assign(existing,candidate);
+      return existing;
+    }
+    this.branches.push(candidate);
+    return candidate;
+  }
+  hasResearchAfter(ply){
+    return Object.keys(this.notes).some(k=>Number(k)>ply)
+      ||Object.keys(this.marks).some(k=>Number(k)>ply)
+      ||this.branches.some(branch=>branch.origin>ply);
+  }
+  /** Called only when a user confirms removing main-line moves. */
+  pruneAfter(ply){
+    for(const data of [this.notes,this.marks]){
+      for(const key of Object.keys(data))if(Number(key)>ply)delete data[key];
+    }
+    this.branches=this.branches.filter(branch=>branch.origin<=ply);
+  }
   branchPgn(branch){const g=new Chess(branch.fen);g.header('Event','Chess Atelier PRO Study Variation','SetUp','1','FEN',branch.fen);for(const u of branch.moves)g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]});return g.pgn({maxWidth:72});}
   serialize(){return {notes:this.notes,marks:this.marks,branches:this.branches};}
 }

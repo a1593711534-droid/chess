@@ -8,9 +8,9 @@ const boot=readFileSync(new URL('../src/ui/boot.js',import.meta.url),'utf8');
 
 test('readability styles load last and use a new cache version',()=>{
   const all=[...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(x=>x[1]);
-  assert.match(all.at(-1),/readability\.css\?v=2\.3\.1/);
-  assert.match(boot,/APP_VERSION='2\.3\.1'/);
-  assert.match(html,/data-app-version="2\.3\.1"/);
+  assert.match(all.at(-1),/readability\.css\?v=2\.3\.2/);
+  assert.match(boot,/APP_VERSION='2\.3\.2'/);
+  assert.match(html,/data-app-version="2\.3\.2"/);
 });
 test('main menu has viewport-bounded, state-independent frame dimensions',()=>{
   assert.match(css,/#main-menu-modal \.main-menu-card\s*\{/);

@@ -14,7 +14,7 @@ modules={}
 for file in MODULES:
     code=file.read_text(encoding='utf-8')
     def replace(match):
-        resolved=(file.parent/match.group(2)).resolve()
+        resolved=(file.parent/match.group(2).split('?',1)[0]).resolve()
         assert resolved in MODULES,(file,match.group(2))
         return f'from {match.group(1)}{key(resolved)}{match.group(1)}'
     code=re.sub(r'from\s+([\'\"])(\.\.?/[^\'\"]+)\1',replace,code)
@@ -22,18 +22,20 @@ for file in MODULES:
         code=code.replace('export const pieceSrc=(type,color)=>`./assets/pieces/${color}${PIECES[color][type]}.svg`;',"export const pieceSrc=(type,color)=>({IMAGE_DATA})[color+PIECES[color][type]];".replace('{IMAGE_DATA}',json.dumps(image_urls)))
     modules[key(file)]='data:text/javascript;base64,'+base64.b64encode(code.encode()).decode()
 html=(ROOT/'index.html').read_text()
-css='\n'.join((ROOT/'styles'/n).read_text() for n in ['base.css','layout.css','board.css','mobile.css','pro.css','viewport.css'])
+css='\n'.join((ROOT/'styles'/n).read_text() for n in ['base.css','layout.css','board.css','mobile.css','pro.css','viewport.css','main-menu.css','readability.css'])
 html=re.sub(r'<link rel="stylesheet"[^>]*>', '',html)
 html=re.sub(r'<script type="module" src="./src/main\.js(?:\?v=[^"]+)?"></script>', '',html)
 html=html.replace('</head>',f'<style>{css}</style><script type="importmap">'+json.dumps({'imports':modules})+'</script></head>')
 html=html.replace('</body>','<script type="module">import "@app/src/main.js"</script></body>')
 with sync_playwright() as pw:
-  browser=pw.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
+  chromium_path=Path('/usr/bin/chromium')
+  browser=pw.chromium.launch(executable_path=str(chromium_path) if chromium_path.exists() else None,headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
   for width,height in [(1440,900),(1280,720),(900,700),(390,844),(360,720)]:
     page=browser.new_page(viewport={'width':width,'height':height},device_scale_factor=1)
     errs=[];page.on('pageerror',lambda e:errs.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded')
     page.wait_for_selector('.square',timeout=15000)
+    page.locator('#new-game').click()
     page.wait_for_timeout(200)
     # Synthetic data: document cannot create a real HTTP Stockfish Worker. Hide only its test-harness error toast.
     page.add_style_tag(content='.toast-stack{display:none!important}')
@@ -56,6 +58,7 @@ with sync_playwright() as pw:
       page.locator('.square[data-square="g6"]').click();page.locator('.square[data-square="h6"]').click()
       assert '訓練完成' in page.locator('#game-status-title').inner_text()
       page.locator('#training-exit').click()
+      page.locator('#main-menu-open').click();page.locator('#menu-new').click()
       page.locator('[data-mode="local"]').click();page.locator('#new-game').click()
       page.locator('.square[data-square="e2"]').click();page.locator('.square[data-square="e4"]').click()
       assert page.locator('#moves-count').inner_text()=='1 PLIES'
@@ -86,7 +89,7 @@ with sync_playwright() as pw:
   print('MISSING OPTIONAL CONTROL RECOVERED',flush=True)
   page.close()
   # Regression: an old HTML build must present a clear recovery screen.
-  mismatched=html.replace('data-app-version="2.0.2"','data-app-version="2.0.0"')
+  mismatched=html.replace('data-app-version="2.3.0"','data-app-version="2.0.0"')
   assert mismatched!=html
   page=browser.new_page()
   errors=[];page.on('pageerror',lambda exc:errors.append(str(exc)))

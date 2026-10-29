@@ -30,7 +30,7 @@
 .arena-save-status{display:none}
 @media(max-width:779px){
   .arena-mobile-actions{
-    display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;
+    display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;
     gap:5px!important;height:auto!important;min-height:0!important;
     align-content:center;align-items:stretch;margin-top:6px!important;
   }
@@ -50,7 +50,7 @@
   .arena .player-strip .clock-display{font-variant-numeric:tabular-nums}
 }
 @media(max-width:370px){
-  .arena-mobile-actions button svg{display:none!important}
+  .arena-mobile-actions button svg{display:inline-block!important}
 }
 @media(max-width:779px) and (max-height:500px){
   :root{--focus-board:min(calc(100vw - 20px),440px)}

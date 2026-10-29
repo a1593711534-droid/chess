@@ -1,3 +1,11 @@
+## v2.3.1 — Stability, gameplay and offline improvements
+
+- Fixed first-turn chess clock timing, variation clock pausing and AI search restarts.
+- Preserved recorded PGN outcomes and corrected study-mode save/reload state.
+- Fixed native piece dragging, accessible arrow-key navigation and landscape viewports.
+- Load Stockfish only when requested, with optional WebAssembly cache and offline page shell.
+- Test chess match lifecycle in Node and Chromium, including offline reloads.
+
 ## v2.3.0 — Larger interface and fixed-size main menu
 
 - Expanded desktop main menu to 1280px on typical large displays, with responsive viewport-safe limits.

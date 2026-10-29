@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'index.html'
+      - 'sw.js'
       - 'src/**'
       - 'styles/**'
       - 'assets/**'
@@ -14,6 +15,8 @@ on:
       - 'package.json'
       - 'THIRD_PARTY_NOTICES.md'
       - '.github/workflows/deploy-pages.yml'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -31,13 +34,21 @@ jobs:
         uses: actions/checkout@v4
       - name: Test editable game source
         run: npm test
+      - name: Browser regression checks
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+          python tests/browser_embedded.py
+          python tests/browser_offline.py
       - name: Assemble static Pages website
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p _site
-          cp -R index.html src styles assets vendor licenses THIRD_PARTY_NOTICES.md _site/
+          cp -R index.html sw.js src styles assets vendor licenses THIRD_PARTY_NOTICES.md _site/
           test -f _site/index.html
+          test -f _site/sw.js
           test -f _site/src/main.js
           test -f _site/vendor/stockfish-19-single.js
           curl --fail --show-error --silent --location --retry 3 --retry-delay 3 \
@@ -48,13 +59,16 @@ jobs:
           touch _site/.nojekyll
           echo 'Editable source and pinned engine validated.'
       - name: Configure GitHub Pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v4
         with:
           path: _site
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

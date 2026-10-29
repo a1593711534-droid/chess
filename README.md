@@ -1,3 +1,11 @@
+## v2.3.1 · Gameplay reliability, accessibility and offline support
+
+- Fixed initial white-side clock timing and protected active clocks while studying training and variations.
+- Recovered interrupted AI searches on returning from move history and practice, without mixing analysis lines.
+- Improved PGN result roundtrips, board drag-and-drop, keyboard navigation and short landscape layouts.
+- Introduced on-demand Stockfish loading and an offline Service Worker cache; the ~99 MB WASM is cached after a successful download when storage allows.
+- Expanded CI with Node tests, Chromium interactions and an offline reload check.
+
 ## v2.3.0 · Enlarged, readable and stable main menu
 
 - The desktop menu grows to up to 1280px wide × 820px tall (over 1.5× its previous ~840px width at 1648px viewport width).
@@ -58,6 +66,12 @@
 **不需要 Render，不需要執行 Python 後端，也不需要上傳整包 ZIP。** 棋藝引擎在玩家的瀏覽器本機運作；首次開啟仍需要網路下載檔案。
 
 [查看部署紀錄](../../actions/workflows/deploy-pages.yml) · [Pages 設定](../../settings/pages)
+
+## 離線快取與更新
+
+- 第一次連線會安裝 Service Worker，預先快取棋盤、CSS、JS、棋子與內建教學資料；安裝完成後，即使沒有網路，也可以重新開啟網頁使用本機雙人對弈與已快取功能。
+- Stockfish 19 的約 99 MB WASM **只在真正需要 AI 或分析時下載**，成功下載後會嘗試快取，以供離線重用。瀏覽器儲存空間不足或清除網站資料時，快取可能遺失。
+- 後續版本優先使用網路更新靜態資源；離線時使用已快取版本。不同瀏覽器的離線儲存限制可能不同。
 
 ## 本機測試
 

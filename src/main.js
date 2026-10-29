@@ -12,7 +12,7 @@ import {decorateIcons} from './utils/icons.js';
 import {OPENINGS,openingFor,continuations,openingGame} from './data/openings.js';
 import {PUZZLES,CATEGORIES,readTrainingStats,recordPuzzle} from './data/puzzles.js';
 import {TrainingSession} from './study/training.js';
-import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.0';
+import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.1';
 
 const $=id=>document.getElementById(id);
 let prefs=loadPrefs();
@@ -22,7 +22,7 @@ let thinking=false;
 let botSequence=0,analysisSequence=0;
 let lastHint=null,analysisInfo=null,analysisFen=null;
 let analysisLines=new Map(),analysisRunning=false;
-let training=null,variation=null,trainingToken=0,clockBeforeTraining=null;
+let training=null,variation=null,trainingToken=0,clockBeforeTraining=null,clockBeforeVariation=null;
 let openingFilter='all',puzzleFilter='全部';
 let promotion=null,confirmCallback=null;
 let engineError=null;
@@ -30,6 +30,26 @@ let engine=null;
 let board=null;
 let menuEditing=true,sessionActive=false,menuPauseSide=null;
 const menuVisible=()=>!$('main-menu-modal').classList.contains('hidden');
+function ensureEngine(){
+  if(!engine)createEngine();
+  return engine;
+}
+function resumeBotIfNeeded(){
+  if(!training&&!variation&&!thinking&&sessionActive&&!menuVisible()&&!session.done
+    &&session.atLatest&&session.config.mode==='ai'&&!session.isHumanTurn())runBot();
+}
+function suspendClockForStudy(){
+  const active=session.clock.active;
+  session.clock.pause();
+  const snapshot=session.clock.snapshot();
+  snapshot.active=active;
+  return snapshot;
+}
+function restoreClockFromStudy(snapshot){
+  if(!snapshot)return;
+  session.clock.restore(snapshot,{resume:sessionActive&&!menuVisible()&&!session.done});
+  if(menuVisible())menuPauseSide=snapshot.active||null;
+}
 function createEngine(){
   engine=new EngineClient((status,error)=>{
     const dot=$('engine-dot'),label=$('engine-status');
@@ -84,6 +104,8 @@ function updateTimeControls(){
 function refreshPrefsFromUi(){prefs={...readSettings()};savePrefs(prefs);renderSettings();}
 function serializedForSave(){
   const data=session.serialize();
+  if(training&&clockBeforeTraining)data.clock={...clockBeforeTraining};
+  else if(variation&&clockBeforeVariation)data.clock={...clockBeforeVariation};
   if(menuVisible()&&menuPauseSide&&!session.done)data.clock.active=menuPauseSide;
   return data;
 }
@@ -110,7 +132,7 @@ function openMainMenu(){
     menuPauseSide=session.clock.active;
     session.clock.pause();
     closeDrawers();
-    if(sessionActive){prefs={...prefs,...session.config,sound:prefs.sound};renderSettings();}
+    if(sessionActive){prefs={...prefs,...session.config,side:prefs.side==='random'?'random':session.config.side,sound:prefs.sound};renderSettings();}
     $('main-menu-modal').classList.remove('hidden');
   }
   setMenuEditing(!sessionActive);
@@ -120,12 +142,13 @@ function openMainMenu(){
 function closeMainMenu(){
   if(!sessionActive)return;
   $('main-menu-modal').classList.add('hidden');
-  if(menuEditing){prefs={...prefs,...session.config,sound:prefs.sound};renderSettings();}
+  if(menuEditing){prefs={...prefs,...session.config,side:prefs.side==='random'?'random':session.config.side,sound:prefs.sound};renderSettings();}
   setMenuEditing(false);
-  if(menuPauseSide&&!session.done&&session.clock.enabled)session.clock.resume(menuPauseSide);
+  const resumeSide=menuPauseSide||(session.ply===0?session.game.turn():null);
+  if(resumeSide&&!session.done&&session.clock.enabled&&!training&&!variation)session.clock.resume(resumeSide);
   menuPauseSide=null;
   updateClocks();
-  if(session.config.mode==='ai'&&!session.done&&!session.isHumanTurn()&&session.atLatest)runBot();
+  resumeBotIfNeeded();
 }
 function saveManual(){
   if(!sessionActive){toast('請先開始對局。','info');return;}
@@ -140,18 +163,18 @@ function loadManual(){
   const restore=()=>{
     try{cancelSearch();session=new ChessSession(manual.game.config);session.restore(manual.game,{resumeClock:false});
       sessionActive=true;menuPauseSide=manual.game.clock?.active||null;
-      prefs={...prefs,...manual.game.config};renderSettings();
+      prefs={...prefs,...manual.game.config,side:prefs.side==='random'?'random':manual.game.config.side};renderSettings();
       flipped=session.config.mode==='ai'&&session.config.side==='b';
-      variation=null;training=null;lastHint=null;render();save();closeMainMenu();toast('已載入手動存檔。');
+      variation=null;training=null;clockBeforeVariation=null;clockBeforeTraining=null;lastHint=null;render();save();closeMainMenu();toast('已載入手動存檔。');
     }catch(error){toast('存檔損毀，無法讀取：'+error.message,'error');}
   };
   if(sessionActive&&!session.done)showConfirm('載入手動存檔？','目前棋局會被手動存檔取代。',restore,'載入');
   else restore();
 }
-function cancelSearch(){botSequence++;analysisSequence++;engine.cancel();thinking=false;analysisRunning=false;const b=$('stop-analysis');if(b)b.disabled=true;}
+function cancelSearch(){botSequence++;analysisSequence++;engine?.cancel();thinking=false;analysisRunning=false;const b=$('stop-analysis');if(b)b.disabled=true;}
 function initialGame(){
   prefs={...readSettings()};savePrefs(prefs);
-  cancelSearch();exitTraining(false);variation=null;session=new ChessSession(prefs);sessionActive=true;
+  cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=new ChessSession(prefs);sessionActive=true;
   $('position-note').dataset.ply='';flipped=session.config.mode==='ai'&&session.config.side==='b';
   menuPauseSide=null;lastHint=null;analysisInfo=null;analysisFen=null;render();closeDrawers();closeMainMenu();save();
 }
@@ -187,13 +210,16 @@ function showPromotion(from,to,color){
   openModal('promotion-modal');
 }
 function startExercise(exercise){
-  cancelSearch();variation=null;if(!training)clockBeforeTraining=session.clock.snapshot();
-  session.clock.pause();training=new TrainingSession(exercise);trainingToken++;
+  cancelSearch();
+  if(variation){variation=null;restoreClockFromStudy(clockBeforeVariation);clockBeforeVariation=null;}
+  if(!training)clockBeforeTraining=suspendClockForStudy();
+  training=new TrainingSession(exercise);trainingToken++;
   lastHint=null;flipped=training.game.turn()==='b';render();closeDrawers();openRightPanel('training');toast(`訓練：${exercise.title}`,'info');
 }
 function exitTraining(restore=true){
-  trainingToken++;training=null;if(clockBeforeTraining){session.clock.restore(clockBeforeTraining,{resume:true});clockBeforeTraining=null;}
-  if(restore){lastHint=null;render();save();}
+  trainingToken++;training=null;
+  if(clockBeforeTraining){restoreClockFromStudy(clockBeforeTraining);clockBeforeTraining=null;}
+  if(restore){lastHint=null;render();save();resumeBotIfNeeded();}
 }
 function trainingMove(input){
   if(!training)return;const result=training.play(input);
@@ -219,15 +245,19 @@ function variationMove(input){
 }
 function beginVariation(){
   if(training){toast('請先離開訓練模式。','info');return;}
-  cancelSearch();const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();openRightPanel('moves');toast('變例探索：現在可從此局面自由走棋。','info');
+  cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
+  const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();openRightPanel('moves');toast('變例探索：現在可從此局面自由走棋。','info');
 }
 function finishVariation(){
   if(!variation)return;
   if(variation.moves.length){try{session.study.addBranch(variation.origin,variation.fen,variation.moves);toast('已儲存變例，可在棋譜頁面再次開啟。');save();}catch(e){toast(`變例儲存失敗：${e.message}`,'error');}}
-  variation=null;render();
+  variation=null;restoreClockFromStudy(clockBeforeVariation);clockBeforeVariation=null;
+  render();save();resumeBotIfNeeded();
 }
 function openVariation(index){
+  if(training){toast('請先離開訓練模式。','info');return;}
   const branch=session.study.branches[index];if(!branch)return;
+  cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
   const g=new Chess(branch.fen);for(const u of branch.moves)g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]});
   variation={origin:branch.origin,fen:branch.fen,game:g,moves:[...branch.moves]};render();toast('已載入變例，可繼續探索；儲存後新增分支。','info');
 }
@@ -254,7 +284,7 @@ function makeMove(input,computer=false){
   if(!computer&&session.config.mode==='ai'&&!session.isHumanTurn())runBot();
 }
 async function runBot(){
-  if(!sessionActive||menuVisible()||session.done||session.config.mode!=='ai'||session.isHumanTurn()||!session.atLatest)return;
+  if(!sessionActive||menuVisible()||training||variation||thinking||session.done||session.config.mode!=='ai'||session.isHumanTurn()||!session.atLatest)return;
   const token=++botSequence,fen=session.game.fen(),setting=resolveLevel(session.config.level);
   const budget=selectAiSearch(session.config,session.clock);
   if(!budget){
@@ -262,12 +292,12 @@ async function runBot(){
     if(outcome?.kind==='timeout'&&!session.result){session.result=outcome;save();toast(gameOutcomeText(outcome),'info');}
     render();return;
   }
-  thinking=true;render();
+  thinking=true;analysisLines=new Map();analysisInfo=null;analysisFen=null;render();
   let uci=null;
   try{
-    uci=await engine.search(fen,{skill:setting.skill,...budget,onInfo:info=>{
+    uci=await ensureEngine().search(fen,{skill:setting.skill,...budget,onInfo:info=>{
       if(botSequence!==token||session.game.fen()!==fen)return;
-      analysisInfo=info;analysisFen=fen;renderAnalysis();
+      analysisInfo=info;analysisFen=fen;analysisLines.set(info.multiPV||1,info);renderAnalysis();
     }});
   }catch(error){engineError=error;}
   if(token!==botSequence||session.game.fen()!==fen)return;
@@ -279,7 +309,7 @@ async function runBot(){
 }
 
 function doUndo(){
-  if(training){training.restart();render();return;}
+  if(training){trainingToken++;training.restart();render();return;}
   if(variation){if(variation.moves.length){variation.moves.pop();variation.game.undo();render();}return;}
   if(session.ply===0)return;
   cancelSearch();const n=session.undo();analysisInfo=null;analysisFen=null;lastHint=null;
@@ -288,7 +318,7 @@ function doUndo(){
 }
 function gameOutcomeText(outcome){
   if(!outcome)return '';
-  const why={timeout:'時間用盡',checkmate:'將死',resign:'認輸',stalemate:'逼和',threefold:'三次重複局面',insufficient:'子力不足',draw:'和棋協定'}[outcome.kind]||'和棋';
+  const why={timeout:'時間用盡',checkmate:'將死',resign:'認輸',stalemate:'逼和',threefold:'三次重複局面',insufficient:'子力不足',draw:'和棋',pgn:'棋譜記錄結果'}[outcome.kind]||'和棋';
   if(!outcome.winner)return `和棋 · ${why}`;
   return `${outcome.winner==='w'?'白方':'黑方'}勝利 · ${why}`;
 }
@@ -362,7 +392,7 @@ function renderMoves(){
     for(const j of [i,i+1]){
       if(j>=moves.length)break;
       const button=document.createElement('button');button.type='button';button.className='move-token'+(session.cursor===j+1?' current':'');button.dataset.ply=String(j+1);button.textContent=moves[j].san;button.title=`查看第 ${j+1} 步`;
-      button.onclick=()=>{session.goTo(j+1);lastHint=null;render();};row.append(button);
+      button.onclick=()=>goToPly(j+1);row.append(button);
     }fragment.append(row);
   }
   list.append(fragment);
@@ -398,13 +428,14 @@ async function analyze(hint=false){
   }
   if(thinking){toast('請先等電腦完成著法。','info');return;}
   cancelSearch();const token=++analysisSequence,fen=activeGame().fen();
-  analysisLines=new Map();analysisRunning=true;$('stop-analysis').disabled=false;
+  analysisLines=new Map();analysisInfo=null;analysisFen=fen;
+  analysisRunning=true;$('stop-analysis').disabled=false;
   lastHint=null;
   $('analysis-state').textContent='分析中…';
   if(!hint)openRightPanel('analysis');
   let best=null,latest=null;
   try{
-    best=await engine.search(fen,{movetime:hint?850:Number($('analysis-time').value),multiPV:hint?1:Number($('multi-pv').value),skill:20,onInfo:info=>{
+    best=await ensureEngine().search(fen,{movetime:hint?850:Number($('analysis-time').value),multiPV:hint?1:Number($('multi-pv').value),skill:20,onInfo:info=>{
       if(token!==analysisSequence)return;
       analysisLines.set(info.multiPV||1,info);
       latest=analysisLines.get(1)||info;analysisInfo=latest;analysisFen=fen;renderAnalysis();
@@ -419,7 +450,18 @@ async function analyze(hint=false){
   }else toast('局面分析完成。');
   render();
 }
-function navigate(move){if(training||variation)return;const next=move==='first'?0:move==='last'?session.ply:session.cursor+(move==='prev'?-1:1);session.goTo(next);lastHint=null;render();}
+function goToPly(ply){
+  if(training||variation)return;
+  const wasLatest=session.atLatest;
+  const next=Math.max(0,Math.min(session.ply,ply));
+  if(next!==session.ply&&thinking)cancelSearch();
+  session.goTo(next);lastHint=null;render();
+  if(!wasLatest&&session.atLatest)resumeBotIfNeeded();
+}
+function navigate(move){
+  const next=move==='first'?0:move==='last'?session.ply:session.cursor+(move==='prev'?-1:1);
+  goToPly(next);
+}
 function flipBoard(){flipped=!flipped;render();}
 function doResign(){
   if(training||variation||session.done||session.ply===0)return;
@@ -444,8 +486,9 @@ function importPgn(){
   try{
     const text=$('pgn-input').value.trim();if(!text)throw new Error('請先貼上 PGN 棋譜。');
     const next=new ChessSession({...prefs,mode:'local',time:'none'});next.importPgn(text);
-    cancelSearch();exitTraining(false);variation=null;session=next;$('position-note').dataset.ply='';flipped=false;lastHint=null;analysisInfo=null;analysisFen=null;
-    prefs={...prefs,mode:'local',time:'none'};savePrefs(prefs);renderSettings();closeModal('import-modal');render();save();toast(`已載入 ${session.ply} 步棋譜。`);closeDrawers();
+    cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=next;$('position-note').dataset.ply='';flipped=false;lastHint=null;analysisInfo=null;analysisFen=null;
+    prefs={...prefs,mode:'local',time:'none'};savePrefs(prefs);renderSettings();closeModal('import-modal');
+    sessionActive=true;render();save();toast(`已載入 ${session.ply} 步棋譜。`);closeDrawers();
   }catch(e){$('import-error').textContent=`匯入失敗：${e.message||'PGN 格式不正確'}`;}
 }
 function closeDrawers(){
@@ -566,8 +609,11 @@ function init(){
   try{
     decorateIcons();
     createGameBoard();
-    createEngine();
+    $('engine-status').textContent='Stockfish 19 · 按需載入';
     startApplication();
+    if('serviceWorker' in navigator&&window.isSecureContext){
+      navigator.serviceWorker.register('./sw.js').catch(error=>console.warn('[Chess Atelier] Offline cache unavailable:',error));
+    }
   }catch(error){
     console.error('[Chess Atelier PRO] Fatal initialization failure:',error);
     showStartupError(document,{reason:'runtime',missing:[error.message||String(error)]});
@@ -576,7 +622,7 @@ function init(){
 function startApplication(){
   const saved=loadSavedGame();if(saved){try{session.restore(saved,{resumeClock:false});sessionActive=true;
     menuPauseSide=saved.clock?.active||null;
-    prefs={...prefs,...saved.config};flipped=session.config.mode==='ai'&&session.config.side==='b';
+    prefs={...prefs,...saved.config,side:prefs.side==='random'?'random':saved.config.side};flipped=session.config.mode==='ai'&&session.config.side==='b';
   }catch{/* corrupted saves are ignored */}}
   // Random is a selection preference, not the resolved side stored in an old game.
   if(!['w','b','random'].includes(prefs.side))prefs.side='w';

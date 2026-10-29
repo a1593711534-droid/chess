@@ -49,6 +49,7 @@ export class ChessSession{
   }
   undo(){
     if(this.ply===0)return 0;this.clock.pause();this.clock.timeout=null;this.result=null;
+    if(this.headers.Result&&this.headers.Result!=='*')this.headers.Result='*';
     const take=this.config.mode==='ai'?(this.ply===1?1:this.isHumanTurn()?2:1):1;
     let undone=0,restoreClock=null;
     for(let i=0;i<take;i++)if(this.game.undo()){
@@ -65,7 +66,8 @@ export class ChessSession{
     for(const [name,value] of Object.entries(this.headers)){if(typeof value==='string')temp.header(name,value);}
     if(this.study.notes['0'])temp.setComment(this.study.notes['0']);
     this.moves.forEach((move,i)=>{temp.move(move.san);if(this.study.notes[String(i+1)])temp.setComment(this.study.notes[String(i+1)]);});
-    if(this.result)temp.header('Result',this.result.winner==='w'?'1-0':this.result.winner==='b'?'0-1':'1/2-1/2');
+    const outcome=this.status();
+    if(outcome)temp.header('Result',outcome.winner==='w'?'1-0':outcome.winner==='b'?'0-1':'1/2-1/2');
     return temp.pgn({maxWidth:72});
   }
   importPgn(text){
@@ -77,7 +79,9 @@ export class ChessSession{
     this.initialFen=initial;this.game=verified;this.headers={...headers};this.cursor=verified.history().length;this.lastMove=this.moves.at(-1)||null;
     this.study=new StudyBook();
     const commentAt=new Chess(initial);if(loaded.getComments){const commentMap=new Map(loaded.getComments().map(x=>[x.fen,x.comment]));if(commentMap.has(commentAt.fen()))this.study.setNote(0,commentMap.get(commentAt.fen()));for(const [i,san] of loaded.history().entries()){commentAt.move(san);if(commentMap.has(commentAt.fen()))this.study.setNote(i+1,commentMap.get(commentAt.fen()));}}
-    this.result=null;this.config.mode='local';this.config.time='none';this.clock=new ChessClock('none');this.clockSnapshots=[];
+    const result=headers.Result||text.trim().match(/(?:^|\s)(1-0|0-1|1\/2-1\/2)\s*$/)?.[1]||'*';
+    this.result=result==='1-0'?{winner:'w',kind:'pgn'}:result==='0-1'?{winner:'b',kind:'pgn'}:result==='1/2-1/2'?{winner:null,kind:'pgn'}:null;
+    this.config.mode='local';this.config.time='none';this.clock=new ChessClock('none');this.clockSnapshots=[];
   }
   serialize(){return {version:1,config:this.config,initialFen:this.initialFen,headers:this.headers,moves:this.moves.map(m=>m.san),result:this.result,clock:this.clock.snapshot(),clockSnapshots:this.clockSnapshots,study:this.study.serialize()};}
   restore(saved,{resumeClock=true,accountElapsed=false}={}){

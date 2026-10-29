@@ -1,6 +1,7 @@
 import {Chess} from '../vendor/chess.js';
 import {ChessSession,LEVELS,resolveLevel} from './chess/session.js';
 import {EngineClient} from './chess/engine.js';
+import {selectAiSearch,describeAiTime,normalizeAiTimeMode} from './chess/time-management.js';
 import {moveToUci,pvToSan,scoreWhite} from './chess/notation.js';
 import {fallbackMove} from './chess/fallback.js';
 import {createBoard,pieceSrc} from './ui/board.js';
@@ -51,6 +52,7 @@ function readSettings(){return {
   side:document.querySelector('.color-choice.selected')?.dataset.side||'w',
   level:$('level-select').value,
   aiThink:$('ai-think-select').value,
+  aiTimeMode:$('ai-time-mode').value,
   time:$('time-select').value,
   sound:prefs.sound,
 };}
@@ -60,13 +62,24 @@ function renderSettings(){
   $('level-select').value=prefs.level?.startsWith('skill-')?prefs.level:'skill-'+(LEVELS[prefs.level]?.skill??10);
   $('time-select').value=prefs.time;
   $('ai-think-select').value=String(prefs.aiThink||'2000');
+  $('ai-time-mode').value=normalizeAiTimeMode(prefs.aiTimeMode);
+  updateTimeControls();
   $('side-section').classList.toggle('hidden',prefs.mode==='local');
   $('level-section').classList.toggle('hidden',prefs.mode==='local');
-  $('ai-think-section').classList.toggle('hidden',prefs.mode==='local');
+  $('ai-time-mode-section').classList.toggle('hidden',prefs.mode==='local');
   $('level-description').textContent=resolveLevel(prefs.level).detail;
   $('sound-label').textContent=prefs.sound?'音效開啟':'音效關閉';
   $('sound-btn').querySelector('[data-icon]').dataset.icon=prefs.sound?'volume':'mute';
   decorateIcons($('sound-btn'));
+}
+function updateTimeControls(){
+  const ai=prefs.mode==='ai',adaptive=normalizeAiTimeMode(prefs.aiTimeMode)==='adaptive';
+  const noClock=prefs.time==='none';
+  $('ai-think-section').classList.toggle('hidden',!ai||(adaptive&&!noClock));
+  $('ai-think-label').textContent=adaptive&&noClock?'不限時搜尋時間':'固定每步搜尋時間';
+  $('ai-time-note').textContent=adaptive
+    ?(noClock?'本局不限時，沒有剩餘棋鐘可供引擎分配；使用下方每步搜尋時間。':'Stockfish 依剩餘棋鐘及加秒自動分配每步搜尋時間。')
+    :'每步搜尋時間固定，不依棋鐘動態調整；搜尋仍消耗 AI 的棋鐘。';
 }
 function refreshPrefsFromUi(){prefs={...readSettings()};savePrefs(prefs);renderSettings();}
 function serializedForSave(){
@@ -242,12 +255,17 @@ function makeMove(input,computer=false){
 }
 async function runBot(){
   if(!sessionActive||menuVisible()||session.done||session.config.mode!=='ai'||session.isHumanTurn()||!session.atLatest)return;
-  const token=++botSequence,fen=session.game.fen(),setting=resolveLevel(session.config.level),
-    moveTime=Math.max(100,Math.min(30000,Number(session.config.aiThink||setting.movetime)||2000));
+  const token=++botSequence,fen=session.game.fen(),setting=resolveLevel(session.config.level);
+  const budget=selectAiSearch(session.config,session.clock);
+  if(!budget){
+    const outcome=session.status();
+    if(outcome?.kind==='timeout'&&!session.result){session.result=outcome;save();toast(gameOutcomeText(outcome),'info');}
+    render();return;
+  }
   thinking=true;render();
   let uci=null;
   try{
-    uci=await engine.search(fen,{skill:setting.skill,movetime:moveTime,onInfo:info=>{
+    uci=await engine.search(fen,{skill:setting.skill,...budget,onInfo:info=>{
       if(botSequence!==token||session.game.fen()!==fen)return;
       analysisInfo=info;analysisFen=fen;renderAnalysis();
     }});
@@ -294,7 +312,7 @@ function render(){
   const isPlayable=training?(!training.solved&&!training.pendingReply):variation?true:session.atLatest&&!session.done&&!thinking&&session.isHumanTurn();
   board.update(current,{flipped,disabled:!isPlayable,lastHint,annotations:training||variation?[]:(session.study.marks[String(session.cursor)]||[])});
   $('active-match-summary').textContent=session.config.mode==='ai'?`人機對弈 · ${resolveLevel(session.config.level).label}`:'雙人本機對弈';
-  $('active-match-detail').textContent=session.config.mode==='ai'?`AI 每步 ${(Number(session.config.aiThink||2000)/1000).toLocaleString('zh-TW')} 秒 · 雙方棋鐘 ${session.config.time==='none'?'不限時':session.config.time} · ${session.config.side==='w'?'執白':'執黑'}`:`雙方棋鐘 ${session.config.time==='none'?'不限時':session.config.time}`;
+  $('active-match-detail').textContent=session.config.mode==='ai'?`${describeAiTime(session.config,session.clock)} · 雙方棋鐘 ${session.config.time==='none'?'不限時':session.config.time} · ${session.config.side==='w'?'執白':'執黑'}`:`雙方棋鐘 ${session.config.time==='none'?'不限時':session.config.time}`;
   const display=statusDisplay();$('status-overline').textContent=`ROUND ${String(Math.floor(session.ply/2)+1).padStart(2,'0')} · ${session.done?'FINISHED':thinking?'THINKING':'IN PROGRESS'}`;
   $('game-status-title').textContent=display.title;
   $('game-status-desc').textContent=display.desc;
@@ -504,7 +522,7 @@ function renderTraining(){
 function bindActions(){
   document.querySelectorAll('[data-mode]').forEach(el=>el.onclick=()=>{document.querySelectorAll('[data-mode]').forEach(x=>x.classList.remove('active'));el.classList.add('active');refreshPrefsFromUi();});
   document.querySelectorAll('[data-side]').forEach(el=>el.onclick=()=>{document.querySelectorAll('[data-side]').forEach(x=>x.classList.remove('selected'));el.classList.add('selected');refreshPrefsFromUi();});
-  $('level-select').onchange=refreshPrefsFromUi;$('time-select').onchange=refreshPrefsFromUi;$('ai-think-select').onchange=refreshPrefsFromUi;
+  $('level-select').onchange=refreshPrefsFromUi;$('time-select').onchange=refreshPrefsFromUi;$('ai-think-select').onchange=refreshPrefsFromUi;$('ai-time-mode').onchange=refreshPrefsFromUi;
   $('main-menu-open').onclick=openMainMenu;$('mobile-main-menu').onclick=openMainMenu;
   $('menu-close').onclick=closeMainMenu;$('menu-continue').onclick=closeMainMenu;
   $('menu-new').onclick=()=>setMenuEditing(true);

@@ -1,3 +1,10 @@
+## v2.2.0 — Professional AI time controls
+
+- Added Stockfish clock-aware time allocation (remaining time and increment), independent of Skill Level.
+- Retained fixed per-move search and a bounded untimed fallback.
+- Clarified chess-clock increment versus AI calculation time in the menu.
+- Preserved earlier saved games' fixed thinking budgets and added time-management regression tests.
+
 # CHANGELOG
 
 ## 2.1.0 · Main menu and match persistence

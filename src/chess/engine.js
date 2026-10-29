@@ -1,4 +1,13 @@
 /** Stockfish UCI adapter. Queues requests and discards cancelled searches safely. */
+/** Convert a GUI search budget to a valid UCI go command. */
+export function buildGoCommand({movetime=900,clock=null,depth=0}={}){
+  if(depth>0)return `go depth ${Math.min(35,Math.max(1,Math.trunc(depth)))}`;
+  if(clock&&['wtime','btime','winc','binc'].every(k=>Number.isFinite(clock[k])&&clock[k]>=0)){
+    const n=k=>Math.max(k.endsWith('time')?1:0,Math.trunc(clock[k]));
+    return `go wtime ${n('wtime')} btime ${n('btime')} winc ${n('winc')} binc ${n('binc')}`;
+  }
+  return `go movetime ${Math.max(100,Math.trunc(movetime))}`;
+}
 export class EngineClient{
   constructor(onState=()=>{}){
     this.onState=onState;this.worker=null;this.state='loading';this.pending=null;this.token=0;
@@ -37,7 +46,7 @@ export class EngineClient{
   cancel(){
     this.token++;if(this.pending&&!this.pending.cancelled){this.pending.cancelled=true;this.post('stop');}
   }
-  async search(fen,{movetime=900,skill=20,multiPV=1,depth=0,onInfo=()=>{}}={}){
+  async search(fen,{movetime=900,clock=null,skill=20,multiPV=1,depth=0,onInfo=()=>{}}={}){
     const request=++this.token;
     await this.readyPromise;
     if(request!==this.token)return null;
@@ -53,9 +62,13 @@ export class EngineClient{
     const finished=new Promise(r=>{resolveFinished=r;});
     return new Promise(resolve=>{
       const done=move=>{resolve(move);resolveFinished();};
-      const timer=setTimeout(()=>this.fail(new Error('引擎計算超時，已停止工作。')),Math.max(12000,movetime+12000));
+      // Clock-driven searches may last longer than fixed move budgets.
+      const side=fen.split(' ')[1]==='b'?'b':'w';
+      const clockBudget=clock?.[side==='w'?'wtime':'btime'];
+      const watchdog=clock&&Number.isFinite(clockBudget)?Math.max(20000,Math.min(1800000,clockBudget+15000)):Math.max(12000,movetime+12000);
+      const timer=setTimeout(()=>this.fail(new Error('引擎計算超時，已停止工作。')),watchdog);
       this.pending={resolve:done,cancelled:false,info:onInfo,timer,finished};
-      this.post(depth>0?`go depth ${Math.min(35,Math.max(1,Math.trunc(depth)))}`:`go movetime ${Math.max(100,Math.trunc(movetime))}`);
+      this.post(buildGoCommand({movetime,clock,depth}));
     });
   }
 }

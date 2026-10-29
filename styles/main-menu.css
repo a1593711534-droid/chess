@@ -19,3 +19,8 @@
 @media(max-width:450px){.menu-form{grid-template-columns:1fr}.menu-form>.section-block{margin-bottom:8px}.main-menu-brand .eyebrow{font-size:9px}.main-menu-brand h1{font-size:17px}.main-menu-card{max-height:98dvh}.menu-config,.menu-saves{padding:12px}.menu-footer{display:none}}
 @media(max-height:700px) and (min-width:741px){.main-menu-card{max-height:96dvh}.main-menu-top{padding:10px 18px}.menu-config,.menu-saves{padding:15px 20px}.menu-form>.section-block{margin-bottom:6px}.main-menu-brand h1{font-size:21px}}
 .modal-backdrop:not(.main-menu-backdrop){z-index:130}.toast-stack{z-index:180}
+
+/* v2.2: Professional time-management form */
+#ai-time-note{color:#d8c69b;font-weight:600}
+#ai-time-mode-section select{color:#f3e3bd}
+@media(min-width:451px){#ai-time-mode-section{grid-column:1/-1}}

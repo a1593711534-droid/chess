@@ -1,6 +1,7 @@
 import {Chess,DEFAULT_POSITION} from '../../vendor/chess.js';
 import {ChessClock} from './clock.js';
 import {StudyBook} from '../study/studybook.js';
+import {normalizeAiTimeMode} from './time-management.js';
 export const LEVELS={
   beginner:{label:'入門',detail:'適合初學者',skill:0,movetime:350},
   casual:{label:'休閒',detail:'輕鬆練習',skill:5,movetime:550},
@@ -83,6 +84,8 @@ export class ChessSession{
     if(!saved||saved.version!==1||!Array.isArray(saved.moves)||saved.moves.length>2000)throw Error('Invalid saved game');
     this.configure(saved.config);
     if(!this.config.aiThink)this.config.aiThink=String(resolveLevel(this.config.level).movetime);
+    // Old saves used fixed time; do not silently reinterpret them.
+    this.config.aiTimeMode=normalizeAiTimeMode(saved.config.aiTimeMode);
     this.initialFen=saved.initialFen||DEFAULT_POSITION;this.headers=saved.headers||{};this.game=new Chess(this.initialFen);
     saved.moves.forEach(san=>this.game.move(san,{strict:true}));
     this.cursor=this.ply;this.lastMove=this.moves.at(-1)||null;this.result=saved.result||null;this.study=new StudyBook(saved.study);

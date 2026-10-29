@@ -1,3 +1,12 @@
+## v2.2.0 · Professional Stockfish time management
+
+- Skill Level (0–20), the **chess clock**, and **AI time-management policy** are independent and locked when a match begins.
+- **Intelligent time management (default for new users):** the engine receives remaining times and increments using standard UCI `go wtime ... btime ... winc ... binc ...` and allocates search time itself.
+- **Fixed time (advanced):** UCI `go movetime N` for each AI move. The clock still counts down and can flag the AI.
+- **Untimed adaptive games:** use the separately selected, bounded fixed search target (default 2 seconds); no clock information exists to schedule from.
+- v2.1 and older saved games/preferences remain in **fixed time** mode when restored. New users get intelligent time management by default.
+- The UI explicitly identifies a clock increment (“每步加秒”) as distinct from engine search time.
+
 # CHESS ATELIER PRO — GitHub Pages
 
 ## v2.1.0 · Main menu, AI controls and save/resume

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant" data-app-version="2.1.0">
+<html lang="zh-Hant" data-app-version="2.2.0">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="./styles/mobile.css" />
   <link rel="stylesheet" href="./styles/pro.css" />
   <link rel="stylesheet" href="./styles/viewport.css?v=layout-20261029" />
-  <link rel="stylesheet" href="./styles/main-menu.css?v=2.1.0" />
+  <link rel="stylesheet" href="./styles/main-menu.css?v=2.2.0" />
 </head>
 <body>
   <div class="app-shell" id="app">
@@ -143,7 +143,7 @@
   <div class="modal-backdrop main-menu-backdrop" id="main-menu-modal" role="dialog" aria-modal="true" aria-labelledby="menu-title">
     <div class="main-menu-card">
       <div class="main-menu-top">
-        <div class="main-menu-brand"><span class="brand-mark">♞</span><div><div class="eyebrow">CHESS ATELIER PRO</div><h1 id="menu-title">棋境 · 主選單</h1><p>專業離線西洋棋工作站 <span id="menu-version">v2.1.0</span></p></div></div>
+        <div class="main-menu-brand"><span class="brand-mark">♞</span><div><div class="eyebrow">CHESS ATELIER PRO</div><h1 id="menu-title">棋境 · 主選單</h1><p>專業離線西洋棋工作站 <span id="menu-version">v2.2.0</span></p></div></div>
         <div class="menu-top-controls"><div class="engine-status"><span class="status-dot" id="engine-dot"></span><span id="engine-status">正在載入引擎</span></div><button id="menu-close" class="icon-button" aria-label="返回棋局">✕</button><button id="mobile-settings" class="hidden" aria-hidden="true" tabindex="-1"></button></div>
       </div>
       <div class="main-menu-grid">
@@ -191,18 +191,25 @@
             </select>
           </section>
           <section class="section-block">
-            <div class="field-label">思考時間 <span class="field-sub">雙方棋鐘</span></div>
+            <div class="field-label">棋鐘規則 <span class="field-sub">雙方各自計時；+ 秒為每步加秒</span></div>
             <select id="time-select" class="select-field" aria-label="棋鐘設定">
               <option value="none">不限時 · Casual</option>
               <option value="3+0">3 分鐘 · 快棋</option>
-              <option value="5+3">5 分鐘 + 3 秒</option>
-              <option value="10+5" selected>10 分鐘 + 5 秒</option>
-              <option value="15+10">15 分鐘 + 10 秒</option>
+              <option value="5+3">5 分鐘 · 每步加 3 秒</option>
+              <option value="10+5" selected>10 分鐘 · 每步加 5 秒</option>
+              <option value="15+10">15 分鐘 · 每步加 10 秒</option>
               <option value="30+0">30 分鐘 · 慢棋</option>
             </select>
           </section>
+          <section class="section-block" id="ai-time-mode-section">
+            <div class="field-label">AI 時間管理 <span class="field-sub">與棋力獨立</span></div>
+            <select id="ai-time-mode" class="select-field" aria-label="AI 時間管理方式">
+              <option value="adaptive" selected>智能分配 · 依棋鐘與局面</option>
+              <option value="fixed">固定每步搜尋時間 · 進階</option>
+            </select>
+          </section>
           <section class="section-block" id="ai-think-section">
-            <div class="field-label">AI 每步思考時間 <span class="field-sub">與雙方棋鐘獨立</span></div>
+            <div class="field-label"><span id="ai-think-label">固定每步搜尋時間</span> <span class="field-sub">搜尋目標時間</span></div>
             <select id="ai-think-select" class="select-field" aria-label="AI 每步思考時間">
               <option value="250">0.25 秒 · 極速</option>
               <option value="500">0.5 秒</option>
@@ -214,7 +221,7 @@
               <option value="30000">30 秒 · 深入</option>
             </select>
           </section>
-          <div class="menu-setting-note">設定只在開始新對局時套用；對局中無法修改。AI 思考時間不會增加棋鐘，時間不足仍可能判負。</div>
+          <div class="menu-setting-note"><span id="ai-time-note">Stockfish 依剩餘棋鐘及加秒自動分配每步搜尋時間。</span><br>設定只在新對局開始時套用；開始後鎖定。棋鐘時間耗盡仍會判負。</div>
           <button class="primary-button" id="new-game"><span data-icon="plus"></span>開始新對局<span class="primary-arrow">↗</span></button>
 </div>
         </div>
@@ -227,13 +234,13 @@
           <button class="secondary-button menu-action" id="menu-save" type="button">儲存目前棋局</button>
           <div class="menu-divider"></div>
           <button id="menu-new" class="text-button menu-new" type="button">建立另一場新對局</button>
-          <div class="menu-game-note">對局模式、執棋顏色、AI 難度、每步思考時間和棋鐘在開局後會固定。新對局才可重新設定。</div>
+          <div class="menu-game-note">對局模式、執棋顏色、AI 難度、時間管理方式、搜尋時間與棋鐘在開局後會固定。新對局才可重新設定。</div>
         </div>
       </div>
       <div class="menu-footer"><span>Stockfish 19 · chess.js · 完全本機運算</span><span>無登入 · 訓練與棋譜保存在瀏覽器</span></div>
     </div>
   </div>
   <div class="toast-stack" id="toast-stack" role="status" aria-live="polite"></div>
-  <script type="module" src="./src/main.js?v=2.1.0"></script>
+  <script type="module" src="./src/main.js?v=2.2.0"></script>
 </body>
 </html>

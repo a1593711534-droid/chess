@@ -14,6 +14,8 @@ test('main menu owns difficulty, clock and independent bot thinking controls',()
   assert.equal((html.match(/<option value="skill-\d+"/g)||[]).length,21);
   assert.ok(html.includes('id="active-match-summary"'));
   assert.ok(html.includes('id="save-game"'));
+  assert.ok(html.includes('id="ai-time-mode"'));
+  assert.ok(html.includes('智能分配 · 依棋鐘與局面'));
   assert.ok(html.includes('id="menu-load"'));
   assert.ok(!html.includes('<header class="app-header">'));
   assert.match(css,/\.app-header\{display:none!important\}/);

@@ -635,20 +635,28 @@ function bindActions(){
   $('menu-save').onclick=saveManual;$('save-game').onclick=saveManual;$('menu-load').onclick=loadManual;
   $('new-game').onclick=showNewGame;$('undo-btn').onclick=doUndo;$('flip-btn').onclick=flipBoard;
   $('mobile-undo-btn').onclick=doUndo;$('mobile-flip-btn').onclick=flipBoard;$('mobile-hint-btn').onclick=()=>analyze(true);
+  $('mobile-annotate-btn').onclick=toggleMobileAnnotation;
   $('sound-btn').onclick=()=>{prefs.sound=!prefs.sound;savePrefs(prefs);renderSettings();toast(prefs.sound?'音效已開啟':'音效已關閉','info');};
   $('resign-btn').onclick=doResign;
   $('nav-start').onclick=()=>navigate('first');$('nav-prev').onclick=()=>navigate('prev');$('nav-next').onclick=()=>navigate('next');$('nav-end').onclick=()=>navigate('last');
   document.querySelectorAll('.panel-tab').forEach(b=>b.onclick=()=>openRightPanel(b.dataset.tab));
   $('analyze-btn').onclick=()=>analyze(false);$('hint-btn').onclick=()=>analyze(true);
   $('stop-analysis').onclick=()=>{cancelSearch();toast('已停止計算。','info');};
-  $('save-note').onclick=()=>{session.study.setNote(session.cursor,$('position-note').value);save();toast('棋譜註解已儲存，也會寫入匯出的 PGN。');};
+  $('position-note').addEventListener('input',()=>{
+    const ply=Number($('position-note').dataset.ply);
+    if(!Number.isInteger(ply))return;
+    session.study.setNote(ply,$('position-note').value);
+    clearTimeout(noteSaveTimer);noteSaveTimer=setTimeout(()=>save(),350);
+  });
+  $('save-note').onclick=()=>{clearTimeout(noteSaveTimer);session.study.setNote(session.cursor,$('position-note').value);save();toast('棋譜註解已儲存，也會寫入匯出的 PGN。');};
   $('create-variation').onclick=beginVariation;$('finish-variation').onclick=finishVariation;
   $('export-variation').onclick=()=>{if(variation)copyText(session.study.branchPgn(variation),'變例 PGN');};
   $('opening-filter').onchange=e=>{openingFilter=e.target.value;renderOpenings();};
   $('puzzle-filter').onchange=e=>{puzzleFilter=e.target.value;renderTraining();};
   $('training-reset').onclick=()=>{if(training){trainingToken++;training.restart();render();}};
   $('training-exit').onclick=()=>exitTraining();
-  $('copy-fen').onclick=()=>copyText(activeGame().fen(),'FEN 局面');$('copy-pgn').onclick=()=>copyText(session.pgn(),'PGN 棋譜');$('export-btn').onclick=exportPgn;
+  $('copy-fen').onclick=()=>copyText(activeGame().fen(),'FEN 局面');$('copy-pgn').onclick=()=>copyText(session.pgn(),'主線 PGN 棋譜');$('export-btn').onclick=exportPgn;
+  $('download-study').onclick=exportStudyBackup;
   $('import-pgn').onclick=()=>{$('pgn-input').value='';$('import-error').textContent='';openModal('import-modal');};
   $('import-confirm').onclick=importPgn;$('import-cancel').onclick=()=>closeModal('import-modal');
   $('promotion-cancel').onclick=()=>{promotion=null;closeModal('promotion-modal');render();};
@@ -658,8 +666,23 @@ function bindActions(){
   document.querySelectorAll('.mobile-tab').forEach(b=>b.onclick=()=>{if(b.dataset.mobile==='board')closeDrawers();else if(b.dataset.mobile==='settings')openMainMenu();else openDrawer(b.dataset.mobile);});
   document.querySelectorAll('.modal-backdrop').forEach(el=>el.addEventListener('click',event=>{if(event.target!==el)return;if(el.id==='promotion-modal'||el.id==='main-menu-modal')return;closeModal(el.id);}));
   window.addEventListener('keydown',event=>{
-    if(event.key==='Escape'){if(!$('confirm-modal').classList.contains('hidden')){closeModal('confirm-modal');return;}if(menuVisible()){closeMainMenu();return;}closeDrawers();for(const id of ['import-modal','confirm-modal'])closeModal(id);return;}
-    if(document.querySelector('.modal-backdrop:not(.hidden)')||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+    const modal=[...document.querySelectorAll('.modal-backdrop:not(.hidden)')].at(-1);
+    if(event.key==='Tab'&&modal){
+      const focusable=[...modal.querySelectorAll('button:not([disabled]),textarea,select')].filter(el=>el.getClientRects().length&&el.tabIndex>=0);
+      if(focusable.length){const first=focusable[0],last=focusable.at(-1);
+        if(event.shiftKey&&(document.activeElement===first||!modal.contains(document.activeElement))){event.preventDefault();last.focus();}
+        else if(!event.shiftKey&&(document.activeElement===last||!modal.contains(document.activeElement))){event.preventDefault();first.focus();}
+      }
+      return;
+    }
+    if(event.key==='Escape'){
+      if(!$('promotion-modal').classList.contains('hidden')){$('promotion-cancel').click();return;}
+      if(!$('confirm-modal').classList.contains('hidden')){confirmCallback=null;closeModal('confirm-modal');return;}
+      if(!$('import-modal').classList.contains('hidden')){closeModal('import-modal');return;}
+      if(menuVisible()){closeMainMenu();return;}
+      closeDrawers();return;
+    }
+    if(modal||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
     if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){event.preventDefault();doUndo();}
     else if(event.key.toLowerCase()==='f'&&!event.ctrlKey&&!event.metaKey){flipBoard();}
   });
@@ -683,19 +706,21 @@ function init(){
   }
 }
 function startApplication(){
-  const saved=loadSavedGame();if(saved){try{session.restore(saved,{resumeClock:false});sessionActive=true;
+  const saved=loadSavedGame();let invalidSave=false;
+  if(saved){try{session.restore(saved,{resumeClock:false});sessionActive=true;
     menuPauseSide=saved.clock?.active||null;
     prefs={...prefs,...saved.config,side:prefs.side==='random'?'random':saved.config.side};flipped=session.config.mode==='ai'&&session.config.side==='b';
-  }catch{/* corrupted saves are ignored */}}
+  }catch{invalidSave=true;}}
   // Random is a selection preference, not the resolved side stored in an old game.
   if(!['w','b','random'].includes(prefs.side))prefs.side='w';
   renderSettings();bindActions();
+  if(invalidSave)toast('自動存檔損毀，已保留原始資料。請使用手動存檔或備份恢復。','error');
   for(const category of CATEGORIES.slice(1)){$('puzzle-filter').add(new Option(category,category));}
   render();
   $('main-menu-modal').classList.remove('hidden');
   setMenuEditing(!sessionActive);
   updateSaveInfo();
-  window.addEventListener('pagehide',()=>save());
+  window.addEventListener('pagehide',()=>{clearTimeout(noteSaveTimer);save();});
   setInterval(()=>{
     if(menuVisible()||!sessionActive)return;
     const timedOut=session.clock.tick();

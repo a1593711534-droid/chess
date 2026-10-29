@@ -1,0 +1,65 @@
+name: CHESS ATELIER PRO - Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'chess-pages-source.zip'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Assemble website and run tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f chess-pages-source.zip ]; then
+            echo '::error::Missing chess-pages-source.zip in repository root.'
+            exit 1
+          fi
+          mkdir -p _site
+          unzip -q chess-pages-source.zip -d _site
+          test -f _site/index.html
+          test -f _site/src/main.js
+          test -f _site/vendor/stockfish-19-single.js
+          (cd _site && node --test tests/*.test.js)
+          rm -rf _site/tests
+          curl --fail --show-error --silent --location --retry 3 --retry-delay 3 \
+            --output _site/vendor/stockfish-19-single.wasm \
+            'https://github.com/nmrugg/stockfish.js/releases/download/v19.0.1/stockfish-19-single.wasm'
+          echo '991bede2f253ebb08ff01fcc48270f4b9c8e66b12d5bd5f8d6f52eb3e3b3a740  _site/vendor/stockfish-19-single.wasm' | sha256sum --check --status
+          test "$(stat -c%s _site/vendor/stockfish-19-single.wasm)" -eq 99169054
+          touch _site/.nojekyll
+          echo 'Site files and pinned engine validated.'
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

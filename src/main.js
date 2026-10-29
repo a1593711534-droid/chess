@@ -16,6 +16,7 @@ import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.1';
 
 const $=id=>document.getElementById(id);
 let prefs=loadPrefs();
+let autoSaveWarningShown=false,usingFallback=false,mobileAnnotating=false,flippedBeforeTraining=null,noteSaveTimer=null;
 let session=new ChessSession(prefs);
 let flipped=false;
 let thinking=false;
@@ -31,7 +32,9 @@ let board=null;
 let menuEditing=true,sessionActive=false,menuPauseSide=null;
 const menuVisible=()=>!$('main-menu-modal').classList.contains('hidden');
 function ensureEngine(){
-  if(!engine)createEngine();
+  if(!engine||engine.state==='error'){
+    engineError=null;createEngine();
+  }
   return engine;
 }
 function resumeBotIfNeeded(){
@@ -55,7 +58,8 @@ function createEngine(){
     const dot=$('engine-dot'),label=$('engine-status');
     dot.className='status-dot'+(status==='ready'?' ready':status==='error'?' error':'');
     label.textContent={loading:'正在載入 Stockfish 19',ready:'Stockfish 19 · 已就緒',thinking:'Stockfish 正在計算',error:'引擎未就緒 · 備援模式'}[status];
-    if(status==='error'){engineError=error;toast(`引擎無法啟動：${error?.message||'未知錯誤'}，改用備援對手。`,'error');}
+    if(status==='error'){engineError=error;toast(`引擎無法啟動：${error?.message||'未知錯誤'}，下次請求會嘗試重新啟動。`,'error');}
+    if(status==='ready'){engineError=null;usingFallback=false;if(board)renderPlayers();}
   });
 }
 function createGameBoard(){
@@ -109,7 +113,15 @@ function serializedForSave(){
   if(menuVisible()&&menuPauseSide&&!session.done)data.clock.active=menuPauseSide;
   return data;
 }
-function save(){if(sessionActive)saveGame(serializedForSave());}
+function save(){
+  if(!sessionActive)return;
+  const ok=saveGame(serializedForSave());
+  if(ok){autoSaveWarningShown=false;$('save-status').textContent='自動儲存正常';}
+  else{
+    $('save-status').textContent='自動儲存失敗 · 請下載備份';
+    if(!autoSaveWarningShown){autoSaveWarningShown=true;toast('瀏覽器無法自動儲存：請立即下載完整研究備份。','error');}
+  }
+}
 function updateSaveInfo(){
   const manual=loadManualGame();
   $('menu-load').disabled=!manual?.game;
@@ -134,6 +146,7 @@ function openMainMenu(){
     closeDrawers();
     if(sessionActive){prefs={...prefs,...session.config,side:prefs.side==='random'?'random':session.config.side,sound:prefs.sound};renderSettings();}
     $('main-menu-modal').classList.remove('hidden');
+    (sessionActive?$('menu-continue'):$('new-game')).focus({preventScroll:true});
   }
   setMenuEditing(!sessionActive);
   updateSaveInfo();
@@ -171,12 +184,19 @@ function loadManual(){
   if(sessionActive&&!session.done)showConfirm('載入手動存檔？','目前棋局會被手動存檔取代。',restore,'載入');
   else restore();
 }
-function cancelSearch(){botSequence++;analysisSequence++;engine?.cancel();thinking=false;analysisRunning=false;const b=$('stop-analysis');if(b)b.disabled=true;}
+function cancelSearch(){
+  botSequence++;analysisSequence++;engine?.cancel();thinking=false;analysisRunning=false;
+  analysisInfo=null;analysisFen=null;analysisLines=new Map();
+  const b=$('stop-analysis');if(b)b.disabled=true;
+  if(board&&$('analysis-state'))renderAnalysis();
+}
 function initialGame(){
   prefs={...readSettings()};savePrefs(prefs);
   cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=new ChessSession(prefs);sessionActive=true;
   $('position-note').dataset.ply='';flipped=session.config.mode==='ai'&&session.config.side==='b';
-  menuPauseSide=null;lastHint=null;analysisInfo=null;analysisFen=null;render();closeDrawers();closeMainMenu();save();
+  menuPauseSide=null;lastHint=null;analysisInfo=null;analysisFen=null;
+  if(mobileAnnotating){mobileAnnotating=false;board.setAnnotationMode(false);$('mobile-annotate-btn').setAttribute('aria-pressed','false');$('mobile-annotate-btn').textContent='標記';}
+  usingFallback=false;render();closeDrawers();closeMainMenu();save();
 }
 function showNewGame(){
   if(sessionActive&&session.ply>0&&!session.done)showConfirm('開始新對局？','目前的對局將被新棋局取代。',initialGame,'開始新對局');
@@ -213,11 +233,13 @@ function startExercise(exercise){
   cancelSearch();
   if(variation){variation=null;restoreClockFromStudy(clockBeforeVariation);clockBeforeVariation=null;}
   if(!training)clockBeforeTraining=suspendClockForStudy();
+  if(!training)flippedBeforeTraining=flipped;
   training=new TrainingSession(exercise);trainingToken++;
   lastHint=null;flipped=training.game.turn()==='b';render();closeDrawers();openRightPanel('training');toast(`訓練：${exercise.title}`,'info');
 }
 function exitTraining(restore=true){
   trainingToken++;training=null;
+  if(flippedBeforeTraining!==null){flipped=flippedBeforeTraining;flippedBeforeTraining=null;}
   if(clockBeforeTraining){restoreClockFromStudy(clockBeforeTraining);clockBeforeTraining=null;}
   if(restore){lastHint=null;render();save();resumeBotIfNeeded();}
 }
@@ -250,7 +272,7 @@ function beginVariation(){
 }
 function finishVariation(){
   if(!variation)return;
-  if(variation.moves.length){try{session.study.addBranch(variation.origin,variation.fen,variation.moves);toast('已儲存變例，可在棋譜頁面再次開啟。');save();}catch(e){toast(`變例儲存失敗：${e.message}`,'error');}}
+  if(variation.moves.length){try{session.study.addBranch(variation.origin,variation.fen,variation.moves);toast('已儲存變例，可在棋譜頁面再次開啟。');save();}catch(e){toast(`變例尚未儲存：${e.message}。目前變例仍在，可先複製 PGN。`,'error');return;}}
   variation=null;restoreClockFromStudy(clockBeforeVariation);clockBeforeVariation=null;
   render();save();resumeBotIfNeeded();
 }
@@ -301,7 +323,8 @@ async function runBot(){
     }});
   }catch(error){engineError=error;}
   if(token!==botSequence||session.game.fen()!==fen)return;
-  if(!uci)uci=fallbackMove(fen,session.config.level);
+  if(!uci){usingFallback=true;uci=fallbackMove(fen,session.config.level);}
+  else usingFallback=false;
   thinking=false;
   if(uci&&session.game.moves({verbose:true}).some(m=>moveToUci(m)===uci)){
     makeMove({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||undefined},true);
@@ -332,7 +355,7 @@ function statusDisplay(){
   if(variation)return {title:'變例沙盒 · STUDY BOARD',desc:'你可以自由走出另一條合法路線，結束時儲存為獨立分支。'};
   const result=session.status();
   if(result)return {title:gameOutcomeText(result),desc:'本局已結束。你可以重新開始或下載棋譜。'};
-  if(!session.atLatest)return {title:'正在回看棋譜',desc:'返回最新局面，即可繼續對弈。'};
+  if(!session.atLatest)return {title:'正在回看棋譜',desc:'正式棋鐘仍在倒數；回到最新局面繼續，或開啟主選單暫停。'};
   if(thinking)return {title:'引擎正在思考',desc:'電腦正在計算最佳的下一步…'};
   if(session.game.isCheck())return {title:`${session.game.turn()==='w'?'白方':'黑方'}被將軍`,desc:'國王受到攻擊，必須先解除將軍。'};
   return {title:`輪到${session.game.turn()==='w'?'白方':'黑方'}走棋`,desc:session.ply===0?'選取棋子開始你的第一步。':'仔細觀察局面，尋找下一步。'};
@@ -340,6 +363,7 @@ function statusDisplay(){
 function render(){
   const current=activeGame();
   const isPlayable=training?(!training.solved&&!training.pendingReply):variation?true:session.atLatest&&!session.done&&!thinking&&session.isHumanTurn();
+  if((training||variation)&&mobileAnnotating){mobileAnnotating=false;board.setAnnotationMode(false);$('mobile-annotate-btn').setAttribute('aria-pressed','false');$('mobile-annotate-btn').textContent='標記';}
   board.update(current,{flipped,disabled:!isPlayable,lastHint,annotations:training||variation?[]:(session.study.marks[String(session.cursor)]||[])});
   $('active-match-summary').textContent=session.config.mode==='ai'?`人機對弈 · ${resolveLevel(session.config.level).label}`:'雙人本機對弈';
   $('active-match-detail').textContent=session.config.mode==='ai'?`${describeAiTime(session.config,session.clock)} · 雙方棋鐘 ${session.config.time==='none'?'不限時':session.config.time} · ${session.config.side==='w'?'執白':'執黑'}`:`雙方棋鐘 ${session.config.time==='none'?'不限時':session.config.time}`;
@@ -360,7 +384,7 @@ function renderPlayers(){
   for(const [position,color] of [['top',topSide],['bottom',bottomSide]]){
     if(training||variation){const isBottom=position==='bottom';$(`${position}-name`).textContent=training?(isBottom?'你 · 解題棋手':'教學應答棋手'):(isBottom?'變例棋手':'變例棋手');$(`${position}-detail`).textContent=training?(isBottom?'TRAINING · ACTIVE':'SCRIPTED REPLIES'):'FREE STUDY · LOCAL';$(`${position}-avatar`).textContent=color==='w'?'♔':'♚';$(`${position}-avatar`).className=`player-avatar ${color==='w'?'light-avatar':'dark-avatar'}`;$(`${position}-captured`).innerHTML='';continue;}
     const isHuman=session.config.mode==='local'||color===session.config.side;
-    const name=session.config.mode==='local'?(color==='w'?'白方棋手':'黑方棋手'):(isHuman?`你 · ${color==='w'?'白方':'黑方'}`:'Stockfish 19');
+    const name=session.config.mode==='local'?(color==='w'?'白方棋手':'黑方棋手'):(isHuman?`你 · ${color==='w'?'白方':'黑方'}`:(usingFallback?'備援 AI · 輕量棋力':'Stockfish 19'));
     const detail=session.config.mode==='local'?'本機對弈 · HUMAN':(isHuman?'人類棋手 · HUMAN':`棋力等級 · ${resolveLevel(session.config.level).label.toUpperCase()}`);
     $(`${position}-name`).textContent=name;$(`${position}-detail`).textContent=detail;
     $(`${position}-avatar`).textContent=color==='w'?'♔':'♚';
@@ -374,7 +398,7 @@ function updateClocks(){
   for(const [pos,side] of [['top',sideTop],['bottom',sideBottom]]){
     const element=$(`${pos}-clock`);element.textContent=training?'TRAIN':variation?'STUDY':session.clock.format(side);
     element.className='clock-display';
-    if(!training&&!variation&&!session.done&&session.atLatest&&session.game.turn()===side)element.classList.add('active-clock');
+    if(!training&&!variation&&!session.done&&session.clock.active===side)element.classList.add('active-clock');
     if(session.clock.enabled&&session.clock.remaining[side]<30000)element.classList.add('low-time');
   }
 }

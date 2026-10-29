@@ -22,7 +22,7 @@ let thinking=false;
 let botSequence=0,analysisSequence=0;
 let lastHint=null,analysisInfo=null,analysisFen=null;
 let analysisLines=new Map(),analysisRunning=false;
-let training=null,variation=null,trainingToken=0,clockBeforeTraining=null;
+let training=null,variation=null,trainingToken=0,clockBeforeTraining=null,clockBeforeVariation=null;
 let openingFilter='all',puzzleFilter='全部';
 let promotion=null,confirmCallback=null;
 let engineError=null;
@@ -30,6 +30,26 @@ let engine=null;
 let board=null;
 let menuEditing=true,sessionActive=false,menuPauseSide=null;
 const menuVisible=()=>!$('main-menu-modal').classList.contains('hidden');
+function ensureEngine(){
+  if(!engine)createEngine();
+  return engine;
+}
+function resumeBotIfNeeded(){
+  if(!training&&!variation&&!thinking&&sessionActive&&!menuVisible()&&!session.done
+    &&session.atLatest&&session.config.mode==='ai'&&!session.isHumanTurn())runBot();
+}
+function suspendClockForStudy(){
+  const active=session.clock.active;
+  session.clock.pause();
+  const snapshot=session.clock.snapshot();
+  snapshot.active=active;
+  return snapshot;
+}
+function restoreClockFromStudy(snapshot){
+  if(!snapshot)return;
+  session.clock.restore(snapshot,{resume:sessionActive&&!menuVisible()&&!session.done});
+  if(menuVisible())menuPauseSide=snapshot.active||null;
+}
 function createEngine(){
   engine=new EngineClient((status,error)=>{
     const dot=$('engine-dot'),label=$('engine-status');
@@ -84,6 +104,8 @@ function updateTimeControls(){
 function refreshPrefsFromUi(){prefs={...readSettings()};savePrefs(prefs);renderSettings();}
 function serializedForSave(){
   const data=session.serialize();
+  if(training&&clockBeforeTraining)data.clock={...clockBeforeTraining};
+  else if(variation&&clockBeforeVariation)data.clock={...clockBeforeVariation};
   if(menuVisible()&&menuPauseSide&&!session.done)data.clock.active=menuPauseSide;
   return data;
 }
@@ -110,7 +132,7 @@ function openMainMenu(){
     menuPauseSide=session.clock.active;
     session.clock.pause();
     closeDrawers();
-    if(sessionActive){prefs={...prefs,...session.config,sound:prefs.sound};renderSettings();}
+    if(sessionActive){prefs={...prefs,...session.config,side:prefs.side==='random'?'random':session.config.side,sound:prefs.sound};renderSettings();}
     $('main-menu-modal').classList.remove('hidden');
   }
   setMenuEditing(!sessionActive);
@@ -120,12 +142,13 @@ function openMainMenu(){
 function closeMainMenu(){
   if(!sessionActive)return;
   $('main-menu-modal').classList.add('hidden');
-  if(menuEditing){prefs={...prefs,...session.config,sound:prefs.sound};renderSettings();}
+  if(menuEditing){prefs={...prefs,...session.config,side:prefs.side==='random'?'random':session.config.side,sound:prefs.sound};renderSettings();}
   setMenuEditing(false);
-  if(menuPauseSide&&!session.done&&session.clock.enabled)session.clock.resume(menuPauseSide);
+  const resumeSide=menuPauseSide||(session.ply===0?session.game.turn():null);
+  if(resumeSide&&!session.done&&session.clock.enabled&&!training&&!variation)session.clock.resume(resumeSide);
   menuPauseSide=null;
   updateClocks();
-  if(session.config.mode==='ai'&&!session.done&&!session.isHumanTurn()&&session.atLatest)runBot();
+  resumeBotIfNeeded();
 }
 function saveManual(){
   if(!sessionActive){toast('請先開始對局。','info');return;}
@@ -148,7 +171,7 @@ function loadManual(){
   if(sessionActive&&!session.done)showConfirm('載入手動存檔？','目前棋局會被手動存檔取代。',restore,'載入');
   else restore();
 }
-function cancelSearch(){botSequence++;analysisSequence++;engine.cancel();thinking=false;analysisRunning=false;const b=$('stop-analysis');if(b)b.disabled=true;}
+function cancelSearch(){botSequence++;analysisSequence++;engine?.cancel();thinking=false;analysisRunning=false;const b=$('stop-analysis');if(b)b.disabled=true;}
 function initialGame(){
   prefs={...readSettings()};savePrefs(prefs);
   cancelSearch();exitTraining(false);variation=null;session=new ChessSession(prefs);sessionActive=true;
@@ -187,13 +210,16 @@ function showPromotion(from,to,color){
   openModal('promotion-modal');
 }
 function startExercise(exercise){
-  cancelSearch();variation=null;if(!training)clockBeforeTraining=session.clock.snapshot();
-  session.clock.pause();training=new TrainingSession(exercise);trainingToken++;
+  cancelSearch();
+  if(variation){variation=null;restoreClockFromStudy(clockBeforeVariation);clockBeforeVariation=null;}
+  if(!training)clockBeforeTraining=suspendClockForStudy();
+  training=new TrainingSession(exercise);trainingToken++;
   lastHint=null;flipped=training.game.turn()==='b';render();closeDrawers();openRightPanel('training');toast(`訓練：${exercise.title}`,'info');
 }
 function exitTraining(restore=true){
-  trainingToken++;training=null;if(clockBeforeTraining){session.clock.restore(clockBeforeTraining,{resume:true});clockBeforeTraining=null;}
-  if(restore){lastHint=null;render();save();}
+  trainingToken++;training=null;
+  if(clockBeforeTraining){restoreClockFromStudy(clockBeforeTraining);clockBeforeTraining=null;}
+  if(restore){lastHint=null;render();save();resumeBotIfNeeded();}
 }
 function trainingMove(input){
   if(!training)return;const result=training.play(input);
@@ -219,15 +245,19 @@ function variationMove(input){
 }
 function beginVariation(){
   if(training){toast('請先離開訓練模式。','info');return;}
-  cancelSearch();const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();openRightPanel('moves');toast('變例探索：現在可從此局面自由走棋。','info');
+  cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
+  const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();openRightPanel('moves');toast('變例探索：現在可從此局面自由走棋。','info');
 }
 function finishVariation(){
   if(!variation)return;
   if(variation.moves.length){try{session.study.addBranch(variation.origin,variation.fen,variation.moves);toast('已儲存變例，可在棋譜頁面再次開啟。');save();}catch(e){toast(`變例儲存失敗：${e.message}`,'error');}}
-  variation=null;render();
+  variation=null;restoreClockFromStudy(clockBeforeVariation);clockBeforeVariation=null;
+  render();save();resumeBotIfNeeded();
 }
 function openVariation(index){
+  if(training){toast('請先離開訓練模式。','info');return;}
   const branch=session.study.branches[index];if(!branch)return;
+  cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
   const g=new Chess(branch.fen);for(const u of branch.moves)g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]});
   variation={origin:branch.origin,fen:branch.fen,game:g,moves:[...branch.moves]};render();toast('已載入變例，可繼續探索；儲存後新增分支。','info');
 }

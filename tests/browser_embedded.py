@@ -106,7 +106,6 @@ with sync_playwright() as pw:
       print('USER FLOW / DRAG / KEYBOARD / PGN OK',flush=True)
       assert not errs,errs
     if width==390:
-      page.locator('#show-records').click()
       page.locator('#show-records').click();page.locator('#tab-openings').click()
       page.screenshot(path=str(ROOT/'PREVIEW_MOBILE_STUDY.png'))
       page.locator('#close-records').click()

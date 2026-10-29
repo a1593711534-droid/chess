@@ -22,7 +22,7 @@ for file in MODULES:
         code=code.replace('export const pieceSrc=(type,color)=>`./assets/pieces/${color}${PIECES[color][type]}.svg`;',"export const pieceSrc=(type,color)=>({IMAGE_DATA})[color+PIECES[color][type]];".replace('{IMAGE_DATA}',json.dumps(image_urls)))
     modules[key(file)]='data:text/javascript;base64,'+base64.b64encode(code.encode()).decode()
 html=(ROOT/'index.html').read_text()
-css='\n'.join((ROOT/'styles'/n).read_text() for n in ['base.css','layout.css','board.css','mobile.css','pro.css','viewport.css','main-menu.css','readability.css','focus.css'])
+css='\n'.join((ROOT/'styles'/n).read_text() for n in ['base.css','layout.css','board.css','mobile.css','pro.css','viewport.css','main-menu.css','readability.css','focus.css','experience.css'])
 html=re.sub(r'<link rel="stylesheet"[^>]*>', '',html)
 html=re.sub(r'<script type="module" src="./src/main\.js(?:\?v=[^"]+)?"></script>', '',html)
 html=html.replace('</head>',f'<style>{css}</style><script type="importmap">'+json.dumps({'imports':modules})+'</script></head>')
@@ -35,8 +35,20 @@ with sync_playwright() as pw:
     errs=[];page.on('pageerror',lambda e:errs.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded')
     page.wait_for_selector('.square',timeout=15000)
+    if width==1440:
+      menu=page.locator('#main-menu-modal').bounding_box()
+      assert abs(menu['x'])<1 and abs(menu['y'])<1 and abs(menu['width']-width)<2 and abs(menu['height']-height)<2,menu
     page.locator('#new-game').click()
     page.wait_for_timeout(200)
+    if width==1440:
+      assert page.locator('#setup-panel').is_visible() and page.locator('#right-panel').is_visible()
+      initial=page.locator('#chessboard').bounding_box()
+      assert initial['width']>=690,initial
+      for tab in ['analysis','openings','training','moves']:
+        page.locator('#tab-'+tab).click()
+        current=page.locator('#chessboard').bounding_box()
+        assert abs(current['width']-initial['width'])<2 and abs(current['x']-initial['x'])<2,(initial,current,tab)
+
     # Synthetic data: document cannot create a real HTTP Stockfish Worker. Hide only its test-harness error toast.
     page.add_style_tag(content='.toast-stack{display:none!important}')
     page.evaluate("document.querySelector('#engine-status').textContent='Stockfish 19 · 離線引擎';document.querySelector('#engine-dot').className='status-dot'")
@@ -47,7 +59,7 @@ with sync_playwright() as pw:
     assert not errs, errs
     page.screenshot(path=str(ROOT/f'PREVIEW_{width}.png'))
     if width==1440:
-      page.locator('#show-records').click();page.locator('#tab-openings').click()
+      page.locator('#focus-open-study').click();page.locator('#tab-openings').click()
       assert page.locator('#opening-library .library-card').count()==33
       page.screenshot(path=str(ROOT/'PREVIEW_OPENINGS.png'))
       page.locator('#tab-training').click()
@@ -59,28 +71,26 @@ with sync_playwright() as pw:
       assert '訓練完成' in page.locator('#game-status-title').inner_text()
       page.locator('#focus-return').click()
       # Training must restore the board orientation that was active beforehand.
-      page.locator('#mobile-flip-btn').click()
+      page.locator('#flip-btn').click()
       original_top_left=page.locator('.square').first.get_attribute('data-square')
-      page.locator('#show-records').click();page.locator('#tab-training').click()
+      page.locator('#focus-open-study').click();page.locator('#tab-training').click()
       page.locator('#puzzle-library .library-card').first.click()
       page.locator('#focus-return').click()
       assert page.locator('.square').first.get_attribute('data-square')==original_top_left
-      page.locator('#mobile-flip-btn').click()
-      page.locator('#mobile-main-menu').click();page.locator('#menu-new').click()
+      page.locator('#flip-btn').click()
+      page.locator('#main-menu-open').click()
       page.locator('[data-mode="local"]').click();page.locator('#new-game').click()
       page.locator('.square[data-square="e2"]').click();page.locator('.square[data-square="e4"]').click()
       assert page.locator('#moves-count').inner_text()=='1 PLIES'
-      page.locator('#show-records').click();page.locator('#tab-moves').click()
-      page.locator('#focus-study-editor summary').click()
-      page.locator('#position-note').fill('Centre control')
+      page.locator('#focus-open-study').click();page.locator('#tab-moves').click()
+            page.locator('#position-note').fill('Centre control')
       page.locator('#save-note').click();page.locator('#create-variation').click()
       page.locator('.square[data-square="e7"]').click();page.locator('.square[data-square="e5"]').click()
       page.locator('#focus-return').click()
       assert page.locator('.variation-item').count()==1
       # Export/import JSON backups with study branches and comments.
-      page.locator('#show-records').click()
-      page.locator('.focus-files summary').click()
-      with page.expect_download() as download_info:
+      page.locator('#focus-open-study').click()
+            with page.expect_download() as download_info:
         page.locator('#download-study').click()
       backup=Path(download_info.value.path()).read_text(encoding='utf-8')
       data=json.loads(backup)
@@ -91,7 +101,7 @@ with sync_playwright() as pw:
       page.locator('#pgn-input').fill(backup)
       page.locator('#import-confirm').click()
       assert page.locator('.variation-item').count()==1
-      page.locator('#show-records').click();page.locator('#tab-analysis').click();assert page.locator('#multi-pv option').count()==3
+      page.locator('#focus-open-study').click();page.locator('#tab-analysis').click();assert page.locator('#multi-pv option').count()==3
       # Native drag-and-drop must reach the target square.
       page.locator('.square[data-square="e7"] .piece-image').drag_to(page.locator('.square[data-square="e5"]'))
       assert page.locator('#moves-count').inner_text()=='2 PLIES'
@@ -184,9 +194,8 @@ with sync_playwright() as pw:
   page.clock.run_for(300)
   before=page.locator('#bottom-clock').inner_text()
   assert before!='03:00',('first move was not charged',before)
-  page.locator('#show-records').click();page.locator('#tab-moves').click()
-  page.locator('#focus-study-editor summary').click()
-  page.locator('#create-variation').click()
+  page.locator('#focus-open-study').click();page.locator('#tab-moves').click()
+    page.locator('#create-variation').click()
   page.clock.fast_forward(181000)
   page.clock.run_for(300)
   assert page.locator('#bottom-clock').inner_text()=='STUDY'

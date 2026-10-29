@@ -91,7 +91,7 @@ with sync_playwright() as pw:
       page.locator('#pgn-input').fill(backup)
       page.locator('#import-confirm').click()
       assert page.locator('.variation-item').count()==1
-      page.locator('#tab-analysis').click();assert page.locator('#multi-pv option').count()==3
+      page.locator('#show-records').click();page.locator('#tab-analysis').click();assert page.locator('#multi-pv option').count()==3
       # Native drag-and-drop must reach the target square.
       page.locator('.square[data-square="e7"] .piece-image').drag_to(page.locator('.square[data-square="e5"]'))
       assert page.locator('#moves-count').inner_text()=='2 PLIES'

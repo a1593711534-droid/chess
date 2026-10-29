@@ -163,9 +163,9 @@ function loadManual(){
   const restore=()=>{
     try{cancelSearch();session=new ChessSession(manual.game.config);session.restore(manual.game,{resumeClock:false});
       sessionActive=true;menuPauseSide=manual.game.clock?.active||null;
-      prefs={...prefs,...manual.game.config};renderSettings();
+      prefs={...prefs,...manual.game.config,side:prefs.side==='random'?'random':manual.game.config.side};renderSettings();
       flipped=session.config.mode==='ai'&&session.config.side==='b';
-      variation=null;training=null;lastHint=null;render();save();closeMainMenu();toast('已載入手動存檔。');
+      variation=null;training=null;clockBeforeVariation=null;clockBeforeTraining=null;lastHint=null;render();save();closeMainMenu();toast('已載入手動存檔。');
     }catch(error){toast('存檔損毀，無法讀取：'+error.message,'error');}
   };
   if(sessionActive&&!session.done)showConfirm('載入手動存檔？','目前棋局會被手動存檔取代。',restore,'載入');
@@ -174,7 +174,7 @@ function loadManual(){
 function cancelSearch(){botSequence++;analysisSequence++;engine?.cancel();thinking=false;analysisRunning=false;const b=$('stop-analysis');if(b)b.disabled=true;}
 function initialGame(){
   prefs={...readSettings()};savePrefs(prefs);
-  cancelSearch();exitTraining(false);variation=null;session=new ChessSession(prefs);sessionActive=true;
+  cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=new ChessSession(prefs);sessionActive=true;
   $('position-note').dataset.ply='';flipped=session.config.mode==='ai'&&session.config.side==='b';
   menuPauseSide=null;lastHint=null;analysisInfo=null;analysisFen=null;render();closeDrawers();closeMainMenu();save();
 }
@@ -318,7 +318,7 @@ function doUndo(){
 }
 function gameOutcomeText(outcome){
   if(!outcome)return '';
-  const why={timeout:'時間用盡',checkmate:'將死',resign:'認輸',stalemate:'逼和',threefold:'三次重複局面',insufficient:'子力不足',draw:'和棋協定'}[outcome.kind]||'和棋';
+  const why={timeout:'時間用盡',checkmate:'將死',resign:'認輸',stalemate:'逼和',threefold:'三次重複局面',insufficient:'子力不足',draw:'和棋',pgn:'棋譜記錄結果'}[outcome.kind]||'和棋';
   if(!outcome.winner)return `和棋 · ${why}`;
   return `${outcome.winner==='w'?'白方':'黑方'}勝利 · ${why}`;
 }
@@ -486,7 +486,7 @@ function importPgn(){
   try{
     const text=$('pgn-input').value.trim();if(!text)throw new Error('請先貼上 PGN 棋譜。');
     const next=new ChessSession({...prefs,mode:'local',time:'none'});next.importPgn(text);
-    cancelSearch();exitTraining(false);variation=null;session=next;$('position-note').dataset.ply='';flipped=false;lastHint=null;analysisInfo=null;analysisFen=null;
+    cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=next;$('position-note').dataset.ply='';flipped=false;lastHint=null;analysisInfo=null;analysisFen=null;
     prefs={...prefs,mode:'local',time:'none'};savePrefs(prefs);renderSettings();closeModal('import-modal');
     sessionActive=true;render();save();toast(`已載入 ${session.ply} 步棋譜。`);closeDrawers();
   }catch(e){$('import-error').textContent=`匯入失敗：${e.message||'PGN 格式不正確'}`;}
@@ -619,7 +619,7 @@ function init(){
 function startApplication(){
   const saved=loadSavedGame();if(saved){try{session.restore(saved,{resumeClock:false});sessionActive=true;
     menuPauseSide=saved.clock?.active||null;
-    prefs={...prefs,...saved.config};flipped=session.config.mode==='ai'&&session.config.side==='b';
+    prefs={...prefs,...saved.config,side:prefs.side==='random'?'random':saved.config.side};flipped=session.config.mode==='ai'&&session.config.side==='b';
   }catch{/* corrupted saves are ignored */}}
   // Random is a selection preference, not the resolved side stored in an old game.
   if(!['w','b','random'].includes(prefs.side))prefs.side='w';

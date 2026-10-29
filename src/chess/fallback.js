@@ -16,7 +16,8 @@ export function fallbackMove(fen,level='club'){
   const game=new Chess(fen),color=game.turn(),all=game.moves({verbose:true});
   if(!all.length)return null;
   let best=null,bestScore=-Infinity;const moves=all.sort(()=>Math.random()-.5);
-  const deep=level==='expert'||level==='master';
+  const skill=level.startsWith('skill-')?Number(level.slice(6)):({beginner:0,casual:5,club:10,expert:16,master:20}[level]??10);
+  const deep=skill>=16;
   for(const move of moves){
     game.move(move);let score=evaluate(game,color);
     if(deep&&!game.isGameOver()){
@@ -26,7 +27,7 @@ export function fallbackMove(fen,level='club'){
       }
       score=.2*score+.8*worst;
     }
-    game.undo();score+=Math.random()*(level==='beginner'?180:level==='casual'?85:18);
+    game.undo();score+=Math.random()*(180-Math.min(20,Math.max(0,skill))*8.1);
     if(score>bestScore){bestScore=score;best=move;}
   }
   return best?`${best.from}${best.to}${best.promotion||''}`:null;

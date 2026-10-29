@@ -21,6 +21,10 @@ export class ChessClock {
     }
     return null;
   }
+  resume(side){
+    if(!this.enabled||this.timeout||!['w','b'].includes(side))return;
+    this.active=side;this.lastTick=performance.now();
+  }
   afterMove(mover,next){
     if(!this.enabled||this.timeout)return;
     this.tick();if(this.timeout)return;

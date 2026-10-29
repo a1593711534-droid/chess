@@ -1,11 +1,11 @@
 import {Chess} from '../vendor/chess.js';
-import {ChessSession,LEVELS} from './chess/session.js';
+import {ChessSession,LEVELS,resolveLevel} from './chess/session.js';
 import {EngineClient} from './chess/engine.js';
 import {moveToUci,pvToSan,scoreWhite} from './chess/notation.js';
 import {fallbackMove} from './chess/fallback.js';
 import {createBoard,pieceSrc} from './ui/board.js';
 import {toast} from './ui/toast.js';
-import {loadPrefs,savePrefs,loadSavedGame,saveGame} from './utils/preferences.js';
+import {loadPrefs,savePrefs,loadSavedGame,saveGame,loadManualGame,saveManualGame} from './utils/preferences.js';
 import {playSound} from './utils/sound.js';
 import {decorateIcons} from './utils/icons.js';
 import {OPENINGS,openingFor,continuations,openingGame} from './data/openings.js';
@@ -27,6 +27,8 @@ let promotion=null,confirmCallback=null;
 let engineError=null;
 let engine=null;
 let board=null;
+let menuEditing=true,sessionActive=false,menuPauseSide=null;
+const menuVisible=()=>!$('main-menu-modal').classList.contains('hidden');
 function createEngine(){
   engine=new EngineClient((status,error)=>{
     const dot=$('engine-dot'),label=$('engine-status');
@@ -48,31 +50,100 @@ function readSettings(){return {
   mode:document.querySelector('.segment.active')?.dataset.mode||'ai',
   side:document.querySelector('.color-choice.selected')?.dataset.side||'w',
   level:$('level-select').value,
+  aiThink:$('ai-think-select').value,
   time:$('time-select').value,
   sound:prefs.sound,
 };}
 function renderSettings(){
   document.querySelectorAll('.segment').forEach(b=>b.classList.toggle('active',b.dataset.mode===prefs.mode));
   document.querySelectorAll('.color-choice').forEach(b=>b.classList.toggle('selected',b.dataset.side===prefs.side));
-  $('level-select').value=LEVELS[prefs.level]?prefs.level:'club';
+  $('level-select').value=prefs.level?.startsWith('skill-')?prefs.level:'skill-'+(LEVELS[prefs.level]?.skill??10);
   $('time-select').value=prefs.time;
+  $('ai-think-select').value=String(prefs.aiThink||'2000');
   $('side-section').classList.toggle('hidden',prefs.mode==='local');
   $('level-section').classList.toggle('hidden',prefs.mode==='local');
-  $('level-description').textContent=LEVELS[prefs.level]?.detail||'具備戰術意識';
+  $('ai-think-section').classList.toggle('hidden',prefs.mode==='local');
+  $('level-description').textContent=resolveLevel(prefs.level).detail;
   $('sound-label').textContent=prefs.sound?'音效開啟':'音效關閉';
   $('sound-btn').querySelector('[data-icon]').dataset.icon=prefs.sound?'volume':'mute';
   decorateIcons($('sound-btn'));
 }
 function refreshPrefsFromUi(){prefs={...readSettings()};savePrefs(prefs);renderSettings();}
-function save(){saveGame(session.serialize());}
+function serializedForSave(){
+  const data=session.serialize();
+  if(menuVisible()&&menuPauseSide&&!session.done)data.clock.active=menuPauseSide;
+  return data;
+}
+function save(){if(sessionActive)saveGame(serializedForSave());}
+function updateSaveInfo(){
+  const manual=loadManualGame();
+  $('menu-load').disabled=!manual?.game;
+  $('menu-save').disabled=!sessionActive;
+  $('menu-continue').disabled=!sessionActive;
+  $('menu-close').disabled=!sessionActive;
+  const last=manual?.date?new Date(manual.date).toLocaleString('zh-TW'):'未建立';
+  $('menu-saved-info').textContent=`自動存檔：${sessionActive?`${session.ply} 步 · ${session.done?'本局已結束':'可繼續'}`:'尚未建立'}\n手動存檔：${last}`;
+}
+function setMenuEditing(editing){
+  menuEditing=editing;
+  $('menu-form').classList.toggle('is-locked',!editing);
+  for(const el of $('menu-form').querySelectorAll('select,.segment,.color-choice'))el.disabled=!editing;
+  $('menu-lock-badge').textContent=editing?'僅套用至新對局':'目前棋局設定已鎖定';
+  $('menu-new').classList.toggle('hidden',editing||!sessionActive);
+}
+function openMainMenu(){
+  if(!menuVisible()){
+    cancelSearch();
+    menuPauseSide=session.clock.active;
+    session.clock.pause();
+    closeDrawers();
+    if(sessionActive){prefs={...prefs,...session.config,sound:prefs.sound};renderSettings();}
+    $('main-menu-modal').classList.remove('hidden');
+  }
+  setMenuEditing(!sessionActive);
+  updateSaveInfo();
+  updateClocks();
+}
+function closeMainMenu(){
+  if(!sessionActive)return;
+  $('main-menu-modal').classList.add('hidden');
+  if(menuEditing){prefs={...prefs,...session.config,sound:prefs.sound};renderSettings();}
+  setMenuEditing(false);
+  if(menuPauseSide&&!session.done&&session.clock.enabled)session.clock.resume(menuPauseSide);
+  menuPauseSide=null;
+  updateClocks();
+  if(session.config.mode==='ai'&&!session.done&&!session.isHumanTurn()&&session.atLatest)runBot();
+}
+function saveManual(){
+  if(!sessionActive){toast('請先開始對局。','info');return;}
+  if(saveManualGame(serializedForSave())){
+    $('save-status').textContent='已儲存 · 重新開啟可讀取';
+    toast('手動存檔成功；下次可從主選單讀取。','success');
+    updateSaveInfo();
+  }else toast('無法寫入存檔，請檢查瀏覽器儲存空間或隱私模式。','error');
+}
+function loadManual(){
+  const manual=loadManualGame();if(!manual?.game)return;
+  const restore=()=>{
+    try{cancelSearch();session=new ChessSession(manual.game.config);session.restore(manual.game,{resumeClock:false});
+      sessionActive=true;menuPauseSide=manual.game.clock?.active||null;
+      prefs={...prefs,...manual.game.config};renderSettings();
+      flipped=session.config.mode==='ai'&&session.config.side==='b';
+      variation=null;training=null;lastHint=null;render();save();closeMainMenu();toast('已載入手動存檔。');
+    }catch(error){toast('存檔損毀，無法讀取：'+error.message,'error');}
+  };
+  if(sessionActive&&!session.done)showConfirm('載入手動存檔？','目前棋局會被手動存檔取代。',restore,'載入');
+  else restore();
+}
 function cancelSearch(){botSequence++;analysisSequence++;engine.cancel();thinking=false;analysisRunning=false;const b=$('stop-analysis');if(b)b.disabled=true;}
 function initialGame(){
-  cancelSearch();exitTraining(false);variation=null;session=new ChessSession(prefs);$('position-note').dataset.ply='';flipped=session.config.mode==='ai'&&session.config.side==='b';
-  lastHint=null;analysisInfo=null;analysisFen=null;render();save();closeDrawers();
-  if(session.config.mode==='ai'&&session.config.side==='b')runBot();
+  prefs={...readSettings()};savePrefs(prefs);
+  cancelSearch();exitTraining(false);variation=null;session=new ChessSession(prefs);sessionActive=true;
+  $('position-note').dataset.ply='';flipped=session.config.mode==='ai'&&session.config.side==='b';
+  menuPauseSide=null;lastHint=null;analysisInfo=null;analysisFen=null;render();closeDrawers();closeMainMenu();save();
 }
 function showNewGame(){
-  if(session.ply>0&&!session.done)showConfirm('開始新對局？','目前的對局將被新棋局取代。',initialGame,'開始新對局');
+  if(sessionActive&&session.ply>0&&!session.done)showConfirm('開始新對局？','目前的對局將被新棋局取代。',initialGame,'開始新對局');
   else initialGame();
 }
 function tryMove(from,to){
@@ -85,7 +156,7 @@ function tryMove(from,to){
     variationMove({from,to});return;
   }
   if(!session.atLatest){toast('請先回到最新局面，才能繼續對弈。','info');return;}
-  if(session.done||thinking||!session.isHumanTurn())return;
+  if(!sessionActive||menuVisible()||session.done||thinking||!session.isHumanTurn())return;
   const candidates=session.game.moves({square:from,verbose:true}).filter(m=>m.to===to);
   if(!candidates.length){toast('這不是合法走法。','error');return;}
   const promotions=candidates.filter(m=>!!m.promotion);
@@ -170,12 +241,13 @@ function makeMove(input,computer=false){
   if(!computer&&session.config.mode==='ai'&&!session.isHumanTurn())runBot();
 }
 async function runBot(){
-  if(session.done||session.config.mode!=='ai'||session.isHumanTurn()||!session.atLatest)return;
-  const token=++botSequence,fen=session.game.fen(),setting=LEVELS[session.config.level]||LEVELS.club;
+  if(!sessionActive||menuVisible()||session.done||session.config.mode!=='ai'||session.isHumanTurn()||!session.atLatest)return;
+  const token=++botSequence,fen=session.game.fen(),setting=resolveLevel(session.config.level),
+    moveTime=Math.max(100,Math.min(30000,Number(session.config.aiThink||setting.movetime)||2000));
   thinking=true;render();
   let uci=null;
   try{
-    uci=await engine.search(fen,{skill:setting.skill,movetime:setting.movetime,onInfo:info=>{
+    uci=await engine.search(fen,{skill:setting.skill,movetime:moveTime,onInfo:info=>{
       if(botSequence!==token||session.game.fen()!==fen)return;
       analysisInfo=info;analysisFen=fen;renderAnalysis();
     }});
@@ -221,6 +293,8 @@ function render(){
   const current=activeGame();
   const isPlayable=training?(!training.solved&&!training.pendingReply):variation?true:session.atLatest&&!session.done&&!thinking&&session.isHumanTurn();
   board.update(current,{flipped,disabled:!isPlayable,lastHint,annotations:training||variation?[]:(session.study.marks[String(session.cursor)]||[])});
+  $('active-match-summary').textContent=session.config.mode==='ai'?`人機對弈 · ${resolveLevel(session.config.level).label}`:'雙人本機對弈';
+  $('active-match-detail').textContent=session.config.mode==='ai'?`AI 每步 ${(Number(session.config.aiThink||2000)/1000).toLocaleString('zh-TW')} 秒 · 雙方棋鐘 ${session.config.time==='none'?'不限時':session.config.time} · ${session.config.side==='w'?'執白':'執黑'}`:`雙方棋鐘 ${session.config.time==='none'?'不限時':session.config.time}`;
   const display=statusDisplay();$('status-overline').textContent=`ROUND ${String(Math.floor(session.ply/2)+1).padStart(2,'0')} · ${session.done?'FINISHED':thinking?'THINKING':'IN PROGRESS'}`;
   $('game-status-title').textContent=display.title;
   $('game-status-desc').textContent=display.desc;
@@ -239,7 +313,7 @@ function renderPlayers(){
     if(training||variation){const isBottom=position==='bottom';$(`${position}-name`).textContent=training?(isBottom?'你 · 解題棋手':'教學應答棋手'):(isBottom?'變例棋手':'變例棋手');$(`${position}-detail`).textContent=training?(isBottom?'TRAINING · ACTIVE':'SCRIPTED REPLIES'):'FREE STUDY · LOCAL';$(`${position}-avatar`).textContent=color==='w'?'♔':'♚';$(`${position}-avatar`).className=`player-avatar ${color==='w'?'light-avatar':'dark-avatar'}`;$(`${position}-captured`).innerHTML='';continue;}
     const isHuman=session.config.mode==='local'||color===session.config.side;
     const name=session.config.mode==='local'?(color==='w'?'白方棋手':'黑方棋手'):(isHuman?`你 · ${color==='w'?'白方':'黑方'}`:'Stockfish 19');
-    const detail=session.config.mode==='local'?'本機對弈 · HUMAN':(isHuman?'人類棋手 · HUMAN':`棋力等級 · ${(LEVELS[session.config.level]||LEVELS.club).label.toUpperCase()}`);
+    const detail=session.config.mode==='local'?'本機對弈 · HUMAN':(isHuman?'人類棋手 · HUMAN':`棋力等級 · ${resolveLevel(session.config.level).label.toUpperCase()}`);
     $(`${position}-name`).textContent=name;$(`${position}-detail`).textContent=detail;
     $(`${position}-avatar`).textContent=color==='w'?'♔':'♚';
     $(`${position}-avatar`).className=`player-avatar ${color==='w'?'light-avatar':'dark-avatar'}`;
@@ -430,7 +504,11 @@ function renderTraining(){
 function bindActions(){
   document.querySelectorAll('[data-mode]').forEach(el=>el.onclick=()=>{document.querySelectorAll('[data-mode]').forEach(x=>x.classList.remove('active'));el.classList.add('active');refreshPrefsFromUi();});
   document.querySelectorAll('[data-side]').forEach(el=>el.onclick=()=>{document.querySelectorAll('[data-side]').forEach(x=>x.classList.remove('selected'));el.classList.add('selected');refreshPrefsFromUi();});
-  $('level-select').onchange=refreshPrefsFromUi;$('time-select').onchange=refreshPrefsFromUi;
+  $('level-select').onchange=refreshPrefsFromUi;$('time-select').onchange=refreshPrefsFromUi;$('ai-think-select').onchange=refreshPrefsFromUi;
+  $('main-menu-open').onclick=openMainMenu;$('mobile-main-menu').onclick=openMainMenu;
+  $('menu-close').onclick=closeMainMenu;$('menu-continue').onclick=closeMainMenu;
+  $('menu-new').onclick=()=>setMenuEditing(true);
+  $('menu-save').onclick=saveManual;$('save-game').onclick=saveManual;$('menu-load').onclick=loadManual;
   $('new-game').onclick=showNewGame;$('undo-btn').onclick=doUndo;$('flip-btn').onclick=flipBoard;
   $('mobile-undo-btn').onclick=doUndo;$('mobile-flip-btn').onclick=flipBoard;$('mobile-hint-btn').onclick=()=>analyze(true);
   $('sound-btn').onclick=()=>{prefs.sound=!prefs.sound;savePrefs(prefs);renderSettings();toast(prefs.sound?'音效已開啟':'音效已關閉','info');};
@@ -452,11 +530,11 @@ function bindActions(){
   $('promotion-cancel').onclick=()=>{promotion=null;closeModal('promotion-modal');render();};
   $('confirm-cancel').onclick=()=>{confirmCallback=null;closeModal('confirm-modal');};
   $('confirm-yes').onclick=()=>{const callback=confirmCallback;confirmCallback=null;closeModal('confirm-modal');callback?.();};
-  $('mobile-settings').onclick=()=>openDrawer('settings');$('show-records').onclick=()=>openRightPanel('moves');$('close-records').onclick=closeDrawers;$('mobile-scrim').onclick=closeDrawers;
-  document.querySelectorAll('.mobile-tab').forEach(b=>b.onclick=()=>{if(b.dataset.mobile==='board')closeDrawers();else openDrawer(b.dataset.mobile);});
-  document.querySelectorAll('.modal-backdrop').forEach(el=>el.addEventListener('click',event=>{if(event.target!==el)return;if(el.id==='promotion-modal')return;closeModal(el.id);}));
+  $('mobile-settings').onclick=openMainMenu;$('show-records').onclick=()=>openRightPanel('moves');$('close-records').onclick=closeDrawers;$('mobile-scrim').onclick=closeDrawers;
+  document.querySelectorAll('.mobile-tab').forEach(b=>b.onclick=()=>{if(b.dataset.mobile==='board')closeDrawers();else if(b.dataset.mobile==='settings')openMainMenu();else openDrawer(b.dataset.mobile);});
+  document.querySelectorAll('.modal-backdrop').forEach(el=>el.addEventListener('click',event=>{if(event.target!==el)return;if(el.id==='promotion-modal'||el.id==='main-menu-modal')return;closeModal(el.id);}));
   window.addEventListener('keydown',event=>{
-    if(event.key==='Escape'){closeDrawers();for(const id of ['import-modal','confirm-modal'])closeModal(id);return;}
+    if(event.key==='Escape'){if(!$('confirm-modal').classList.contains('hidden')){closeModal('confirm-modal');return;}if(menuVisible()){closeMainMenu();return;}closeDrawers();for(const id of ['import-modal','confirm-modal'])closeModal(id);return;}
     if(document.querySelector('.modal-backdrop:not(.hidden)')||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
     if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){event.preventDefault();doUndo();}
     else if(event.key.toLowerCase()==='f'&&!event.ctrlKey&&!event.metaKey){flipBoard();}
@@ -478,14 +556,21 @@ function init(){
   }
 }
 function startApplication(){
-  const saved=loadSavedGame();if(saved){try{session.restore(saved);prefs={...prefs,...saved.config};flipped=session.config.mode==='ai'&&session.config.side==='b';}catch{/* corrupted saves are ignored */}}
+  const saved=loadSavedGame();if(saved){try{session.restore(saved,{resumeClock:false});sessionActive=true;
+    menuPauseSide=saved.clock?.active||null;
+    prefs={...prefs,...saved.config};flipped=session.config.mode==='ai'&&session.config.side==='b';
+  }catch{/* corrupted saves are ignored */}}
   // Random is a selection preference, not the resolved side stored in an old game.
   if(!['w','b','random'].includes(prefs.side))prefs.side='w';
   renderSettings();bindActions();
   for(const category of CATEGORIES.slice(1)){$('puzzle-filter').add(new Option(category,category));}
   render();
-  if(session.config.mode==='ai'&&!session.done&&!session.isHumanTurn())runBot();
+  $('main-menu-modal').classList.remove('hidden');
+  setMenuEditing(!sessionActive);
+  updateSaveInfo();
+  window.addEventListener('pagehide',()=>save());
   setInterval(()=>{
+    if(menuVisible()||!sessionActive)return;
     const timedOut=session.clock.tick();
     if(timedOut){
       cancelSearch();

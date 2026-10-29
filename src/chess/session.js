@@ -8,6 +8,13 @@ export const LEVELS={
   expert:{label:'高手',detail:'積極計算變化',skill:16,movetime:1300},
   master:{label:'大師',detail:'高強度對抗',skill:20,movetime:2500},
 };
+// Stockfish exposes 21 discrete UCI Skill Level values, independent of thinking time.
+export const SKILL_LEVELS=Object.freeze(Object.fromEntries(Array.from({length:21},(_,i)=>[
+  `skill-${i}`,{label:`Lv ${String(i+1).padStart(2,'0')} · Skill ${i}/20`,
+  detail:i<5?'入門練習':i<10?'休閒對弈':i<15?'俱樂部挑戰':i<19?'進階戰術':'高強度挑戰',
+  skill:i,movetime:2000}
+])));
+export const resolveLevel=id=>SKILL_LEVELS[id]||LEVELS[id]||SKILL_LEVELS['skill-10'];
 export class ChessSession{
   constructor(prefs){this.configure(prefs);}
   configure(prefs){
@@ -72,14 +79,15 @@ export class ChessSession{
     this.result=null;this.config.mode='local';this.config.time='none';this.clock=new ChessClock('none');this.clockSnapshots=[];
   }
   serialize(){return {version:1,config:this.config,initialFen:this.initialFen,headers:this.headers,moves:this.moves.map(m=>m.san),result:this.result,clock:this.clock.snapshot(),clockSnapshots:this.clockSnapshots,study:this.study.serialize()};}
-  restore(saved){
+  restore(saved,{resumeClock=true,accountElapsed=false}={}){
     if(!saved||saved.version!==1||!Array.isArray(saved.moves)||saved.moves.length>2000)throw Error('Invalid saved game');
     this.configure(saved.config);
+    if(!this.config.aiThink)this.config.aiThink=String(resolveLevel(this.config.level).movetime);
     this.initialFen=saved.initialFen||DEFAULT_POSITION;this.headers=saved.headers||{};this.game=new Chess(this.initialFen);
     saved.moves.forEach(san=>this.game.move(san,{strict:true}));
     this.cursor=this.ply;this.lastMove=this.moves.at(-1)||null;this.result=saved.result||null;this.study=new StudyBook(saved.study);
     this.clockSnapshots=Array.isArray(saved.clockSnapshots)?saved.clockSnapshots:[];
-    this.clock.restore(saved.clock,{accountElapsed:true});
+    this.clock.restore(saved.clock,{resume:resumeClock,accountElapsed});
     if(this.result||this.game.isGameOver())this.clock.pause();
   }
   captured(){

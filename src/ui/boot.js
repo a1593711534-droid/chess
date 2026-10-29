@@ -3,28 +3,32 @@
  * This is deliberately independent of the chess engine: a damaged or stale
  * index.html should produce an actionable message instead of a blank board.
  */
-export const APP_VERSION='2.0.2';
+export const APP_VERSION='2.1.0';
 
 // Every literal id accessed by the application at startup or during gameplay.
 // Kept explicit so tests can detect newly added UI references.
 export const REQUIRED_IDS=[
-  'analysis-state','analysis-time','analyze-btn','arena-type','chessboard','close-records',
-  'confirm-cancel','confirm-text','confirm-title','confirm-yes','copy-fen','copy-pgn',
-  'create-variation','engine-dot','engine-status','eval-depth','eval-fill','eval-score',
-  'export-btn','export-variation','finish-variation','flip-btn','game-status-desc',
-  'game-status-title','hint-btn','import-cancel','import-confirm','import-error',
-  'import-pgn','level-description','level-section','level-select','mobile-flip-btn',
-  'mobile-hint-btn','mobile-scrim','mobile-settings','mobile-undo-btn','moves-count',
-  'moves-list','multi-pv','nav-end','nav-next','nav-prev','nav-start','new-game',
-  'note-position','opening-candidates','opening-detected','opening-filter',
+  'active-match-detail','active-match-summary','ai-think-section','ai-think-select','analysis-state',
+  'analysis-time','analyze-btn','arena-type','chessboard','close-records',
+  'confirm-cancel','confirm-modal','confirm-text','confirm-title','confirm-yes',
+  'copy-fen','copy-pgn','create-variation','engine-dot','engine-status',
+  'eval-depth','eval-fill','eval-score','export-btn','export-variation',
+  'finish-variation','flip-btn','game-status-desc','game-status-title','hint-btn',
+  'import-cancel','import-confirm','import-error','import-pgn','level-description',
+  'level-section','level-select','main-menu-modal','main-menu-open','menu-close',
+  'menu-continue','menu-form','menu-load','menu-lock-badge','menu-new',
+  'menu-save','menu-saved-info','mobile-flip-btn','mobile-hint-btn','mobile-main-menu',
+  'mobile-scrim','mobile-settings','mobile-undo-btn','moves-count','moves-list',
+  'multi-pv','nav-end','nav-next','nav-prev','nav-start',
+  'new-game','note-position','opening-candidates','opening-detected','opening-filter',
   'opening-library','pgn-input','position-indicator','position-note','promotion-cancel',
   'promotion-options','puzzle-filter','puzzle-library','pv-line','resign-btn',
-  'right-panel','round-caption','save-note','setup-panel','show-records','side-section',
-  'solved-count','sound-btn','sound-label','stat-moves','stat-phase','status-overline',
-  'stop-analysis','time-select','training-active','training-errors','training-exit',
-  'training-goal','training-label','training-name','training-reset','training-step',
-  'turn-message','undo-btn','variation-list','variation-moves','variation-strip',
-  'variation-title',
+  'right-panel','round-caption','save-game','save-note','save-status',
+  'setup-panel','show-records','side-section','solved-count','sound-btn',
+  'sound-label','stat-moves','stat-phase','status-overline','stop-analysis',
+  'time-select','training-active','training-errors','training-exit','training-goal',
+  'training-label','training-name','training-reset','training-step','turn-message',
+  'undo-btn','variation-list','variation-moves','variation-strip','variation-title',
 ];
 
 /** Restore the optional Stop button if a partly-cached older HTML omitted it. */
@@ -61,7 +65,7 @@ export function showStartupError(doc,issue){
     :issue?.reason==='runtime'
       ?`初始化過程發生錯誤：${(issue?.missing||[]).join('、')||'未知'}。請依照下方指示排除版本或檔案問題。`
       :`網頁缺少必要的操作元件：${(issue?.missing||[]).join('、')||'未知'}。已停止載入，避免功能異常。`;
-  const help=doc.createElement('p');help.textContent='請關閉舊伺服器視窗，將修正版 ZIP 完整解壓縮到新資料夾，雙擊其中的 start_windows.bat，然後在新開啟的頁面按 Ctrl+Shift+R 強制重新整理。不要混用舊版 index.html 與新版 src/ 檔案。';
+  const help=doc.createElement('p');help.textContent='請重新整理頁面 (Ctrl+Shift+R)。若部署於 GitHub Pages，請確認最新的 GitHub Actions 部署已成功，避免 HTML 和 JavaScript 版本不一致。';
   const refresh=doc.createElement('button');refresh.textContent='重新整理頁面';refresh.type='button';
   refresh.style.cssText='background:#cfa977;color:#111b21;border:0;border-radius:7px;padding:11px 18px;font-size:15px;font-weight:700;cursor:pointer;margin-top:10px;';
   refresh.addEventListener('click',()=>doc.defaultView.location.reload());

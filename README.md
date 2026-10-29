@@ -1,5 +1,16 @@
 # CHESS ATELIER PRO — GitHub Pages
 
+## v2.1.0 · Main menu, AI controls and save/resume
+
+- A dedicated **Main Menu** now owns match type, side, both players' chess clock, and **21 Stockfish UCI Skill Levels (0–20)**.
+- The **AI think budget is independent from the chess clock**: choose 0.25, 0.5, 1, 2, 4, 8, 15 or 30 seconds per move. The clock can still flag while the AI calculates; no Elo rating is claimed from Skill Level alone.
+- When a game starts, these match settings become read-only. To change them, create a new game. During an active game the left panel displays the locked settings but no editable difficulty control.
+- The website **autosaves** after moves and on exit. Select **儲存目前棋局** for an extra manual save; use **繼續目前棋局** or **載入手動存檔** from the main menu on a later visit.
+- Local saves use browser `localStorage` and do not sync across devices. Clearing site data or using restricted private browsing can remove them.
+- The game clock **pauses when the main menu opens** and does not consume offline time while the browser is closed. This is intended for offline-friendly casual play, not official online competition.
+- The redundant page-wide header was removed: branding, version and engine status now appear in the main menu, leaving more room for the chessboard.
+
+
 **Play:** https://a1593711534-droid.github.io/chess/
 
 本 Repository 已改為 **原始碼逐檔管理**。修改棋盤、棋鐘、Stockfish 控制或版面時，直接編輯相關的 HTML、CSS、JS 檔案，不必重新打包 ZIP。

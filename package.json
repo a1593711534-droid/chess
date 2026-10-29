@@ -1,6 +1,6 @@
 {
   "name": "chess-atelier-pro-offline",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "private": true,
   "type": "module",
   "description": "Offline professional chess web application. No npm install required.",

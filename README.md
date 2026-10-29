@@ -1,3 +1,11 @@
+## v2.3.1 · Gameplay reliability, accessibility and offline support
+
+- Fixed initial white-side clock timing and protected active clocks while studying training and variations.
+- Recovered interrupted AI searches on returning from move history and practice, without mixing analysis lines.
+- Improved PGN result roundtrips, board drag-and-drop, keyboard navigation and short landscape layouts.
+- Introduced on-demand Stockfish loading and an offline Service Worker cache; the ~99 MB WASM is cached after a successful download when storage allows.
+- Expanded CI with Node tests, Chromium interactions and an offline reload check.
+
 ## v2.3.0 · Enlarged, readable and stable main menu
 
 - The desktop menu grows to up to 1280px wide × 820px tall (over 1.5× its previous ~840px width at 1648px viewport width).

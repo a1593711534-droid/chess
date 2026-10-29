@@ -5,7 +5,7 @@ const root = new URL('../', import.meta.url);
 const html = readFileSync(new URL('index.html', root), 'utf8');
 const css = readFileSync(new URL('styles/viewport.css', root), 'utf8');
 test('viewport stylesheet is loaded after all legacy styles', () => {
-  assert.match(html, /styles\/viewport\.css\?v=layout-20261029/);
+  assert.match(html, /styles\/viewport\.css\?v=layout-20261030/);
   assert.ok(html.indexOf('styles/viewport.css') > html.indexOf('styles/pro.css'));
 });
 test('large screens use a viewport-height-based square board and panels fill the side space', () => {

@@ -4,14 +4,17 @@ import {readFileSync} from 'node:fs';
 
 const css=readFileSync(new URL('../styles/readability.css',import.meta.url),'utf8');
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const experience=readFileSync(new URL('../styles/experience.css',import.meta.url),'utf8');
 const boot=readFileSync(new URL('../src/ui/boot.js',import.meta.url),'utf8');
 
-test('focus styles override readability and retain a versioned cache key',()=>{
+test('experience styles override focus and readability and retain a versioned cache key',()=>{
   const all=[...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(x=>x[1]);
   assert.match(all.at(-1),/focus\.css\?v=20261030/);
   assert.ok(all.some(x=>/readability\.css\?v=2\.3\.3/.test(x)));
   assert.match(boot,/APP_VERSION='2\.3\.3'/);
   assert.match(html,/data-app-version="2\.3\.3"/);
+  assert.match(experience,/grid-template-columns:minmax\(286px,1fr\)/);
+  assert.match(experience,/#main-menu-modal \.main-menu-card/);
 });
 test('main menu has viewport-bounded, state-independent frame dimensions',()=>{
   assert.match(css,/#main-menu-modal \.main-menu-card\s*\{/);

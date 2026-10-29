@@ -89,10 +89,10 @@
       <aside class="side-panel right-panel" id="right-panel" aria-label="棋譜與分析">
         <div class="panel-heading right-heading"><div><div class="eyebrow">GAME CENTER</div><h2>對局中心</h2></div><div class="right-heading-actions"><button class="icon-button" id="export-btn" title="下載 PGN 棋譜" aria-label="下載 PGN 棋譜"><span data-icon="download"></span></button><button class="icon-button close-records" id="close-records" aria-label="關閉對局中心" title="關閉對局中心"><span data-icon="x"></span></button></div></div>
         <div class="panel-tabs" role="tablist" aria-label="棋譜與分析">
-          <button class="panel-tab active" id="tab-moves" role="tab" aria-selected="true" data-tab="moves">棋譜記錄</button>
-          <button class="panel-tab" id="tab-analysis" role="tab" aria-selected="false" data-tab="analysis">引擎分析</button>
-          <button class="panel-tab" id="tab-openings" role="tab" aria-selected="false" data-tab="openings">開局庫</button>
-          <button class="panel-tab" id="tab-training" role="tab" aria-selected="false" data-tab="training">戰術訓練</button>
+          <button class="panel-tab active" id="tab-moves" role="tab" aria-selected="true" data-tab="moves"><span data-icon="list"></span>棋譜</button>
+          <button class="panel-tab" id="tab-analysis" role="tab" aria-selected="false" data-tab="analysis"><span data-icon="search"></span>分析</button>
+          <button class="panel-tab" id="tab-openings" role="tab" aria-selected="false" data-tab="openings"><span data-icon="book-open"></span>開局</button>
+          <button class="panel-tab" id="tab-training" role="tab" aria-selected="false" data-tab="training"><span data-icon="target"></span>訓練</button>
         </div>
         <div class="panel-body" id="moves-tab" role="tabpanel">
           <div class="notation-header"><span>MOVE HISTORY</span><span id="moves-count">0 PLIES</span></div>
@@ -244,8 +244,9 @@
           <div id="menu-saved-info" class="save-slot-info">尚無存檔</div>
           <button class="primary-button menu-action" id="menu-start-shortcut" type="button"><span data-icon="plus"></span>立即開始新對局</button>
           <button class="primary-button menu-action" id="menu-continue" type="button"><span data-icon="play"></span>繼續目前棋局</button>
-          <button class="secondary-button menu-action" id="menu-load" type="button">載入手動存檔</button>
-          <button class="secondary-button menu-action" id="menu-save" type="button">儲存目前棋局</button>
+          <button class="secondary-button menu-action" id="menu-load" type="button"><span data-icon="upload"></span>載入手動存檔</button>
+          <button class="secondary-button menu-action" id="menu-import" type="button"><span data-icon="clipboard"></span>匯入 PGN / 研究備份</button>
+          <button class="secondary-button menu-action" id="menu-save" type="button"><span data-icon="download"></span>儲存目前棋局</button>
           <div class="menu-divider"></div>
           <button id="menu-new" class="text-button menu-new" type="button">建立另一場新對局</button>
           <div class="menu-game-note">對局模式、執棋顏色、AI 難度、時間管理方式、搜尋時間與棋鐘在開局後會固定。新對局才可重新設定。</div>

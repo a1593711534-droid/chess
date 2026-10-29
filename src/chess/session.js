@@ -135,6 +135,12 @@ export class ChessSession{
   serialize(){return {version:1,config:this.config,initialFen:this.initialFen,headers:this.headers,moves:this.moves.map(m=>m.san),result:this.result,clock:this.clock.snapshot(),clockSnapshots:this.clockSnapshots,study:this.study.serialize()};}
   restore(saved,{resumeClock=true,accountElapsed=false,strictStudy=false}={}){
     if(!saved||saved.version!==1||!saved.config||typeof saved.config!=='object'||Array.isArray(saved.config)||!Array.isArray(saved.moves)||saved.moves.length>2000)throw Error('Invalid saved game');
+    if(!['ai','local'].includes(saved.config.mode)
+      ||!['w','b'].includes(saved.config.side)
+      ||!(saved.config.time==='none'||/^[0-9]{1,3}\+[0-9]{1,3}$/.test(saved.config.time))
+      ||saved.moves.some(san=>typeof san!=='string'||san.length>32))throw Error('Invalid saved configuration or moves');
+    if(strictStudy&&(!saved.study||typeof saved.study!=='object'))throw Error('研究備份缺少研究資料');
+    if(saved.clockSnapshots!==undefined&&(!Array.isArray(saved.clockSnapshots)||saved.clockSnapshots.length>2000))throw Error('Invalid saved clock history');
     this.configure(saved.config);
     if(!this.config.aiThink)this.config.aiThink=String(resolveLevel(this.config.level).movetime);
     // Old saves used fixed time; do not silently reinterpret them.
@@ -157,7 +163,9 @@ export class ChessSession{
     }
     if(saved.clock!==undefined&&saved.clock!==null){
       if(!saved.clock||typeof saved.clock!=='object'||Array.isArray(saved.clock)
-        ||!saved.clock.remaining||['w','b'].some(side=>!Number.isFinite(saved.clock.remaining[side])||saved.clock.remaining[side]<0)){
+        ||!saved.clock.remaining||['w','b'].some(side=>!Number.isFinite(saved.clock.remaining[side])||saved.clock.remaining[side]<0)
+        ||(saved.clock.active!=null&&!['w','b'].includes(saved.clock.active))
+        ||(saved.clock.timeout!=null&&!['w','b'].includes(saved.clock.timeout))){
         throw Error('Invalid saved clock');
       }
     }

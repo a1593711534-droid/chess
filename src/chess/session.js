@@ -87,10 +87,14 @@ export class ChessSession{
       return result;
     }catch{return null;}
   }
+  undoTargetPly(){
+    const take=this.config.mode==='ai'?(this.ply===1?1:this.isHumanTurn()?2:1):1;
+    return Math.max(0,this.ply-take);
+  }
   undo(){
     if(this.ply===0)return 0;this.clock.pause();this.clock.timeout=null;this.result=null;
     if(this.headers.Result&&this.headers.Result!=='*')this.headers.Result='*';
-    const take=this.config.mode==='ai'?(this.ply===1?1:this.isHumanTurn()?2:1):1;
+    const take=this.ply-this.undoTargetPly();
     let undone=0,restoreClock=null;
     for(let i=0;i<take;i++)if(this.game.undo()){
       undone++;restoreClock=this.clockSnapshots.pop()||null;

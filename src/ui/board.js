@@ -5,12 +5,14 @@ export function createBoard(container,onMove,onSelect,onAnnotate){
   let selected=null,reverse=false,possible=[],hint=null,view=null,locked=false,dragging=null,marks=[],markStart=null,annotationMode=false;
   function setSelection(square){selected=square;possible=square&&view?view.moves({square,verbose:true}).map(m=>m.to):[];onSelect?.(square);render();}
   function selectSquare(square){
-    if(locked||!view)return;
+    if(!view)return;
+    // Annotations must remain available when the history board is read-only.
     if(annotationMode){
       if(markStart){const from=markStart;markStart=null;onAnnotate?.(from,square);}
       else markStart=square;
       return;
     }
+    if(locked)return;
     const piece=view.get(square);
     if(selected&&possible.includes(square)){
       const from=selected;selected=null;possible=[];onMove(from,square);return;

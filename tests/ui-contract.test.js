@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {APP_VERSION,REQUIRED_IDS,inspectUi} from '../src/ui/boot.js';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const js=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+const js=['main.js','ui/notation-view.js','ui/library-panels.js'].map(name=>readFileSync(new URL('../src/'+name,import.meta.url),'utf8')).join('\n');
 const ids=new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]));
 const literalRefs=[...js.matchAll(/\$\(['"]([^'"]+)['"]\)/g)].map(m=>m[1]);
 

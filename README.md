@@ -1,3 +1,17 @@
+## v2.3.6 · Long-game performance, modular UI, real Stockfish regression (phase 3)
+
+- The main-line move history is indexed incrementally instead of repeatedly asking chess.js to undo/replay the entire game during each render. Repetition counts, review positions and position-terminal checks are cached and invalidated on play, undo, import and restore.
+- Notation rendering and opening/training library views now live in separate modules; hidden library tabs no longer recreate all their cards on every game update.
+- The final mobile CSS overrides were consolidated into `styles/experience.css`, retaining cascade order and reducing one production CSS request.
+- GitHub Actions now checks a pinned Stockfish 19 WASM SHA-256, uses a real Chromium Worker to verify UCI readiness, MultiPV and legal best moves, and reuses that same verified binary for Pages.
+- Added a 1,000-ply performance regression alongside browser and offline regression checks. The engine binary is downloaded in CI and not committed to this repository.
+
+## v2.3.5 · Mobile usability and accessible controls (phase 2)
+
+- Safer short-landscape phone chessboard sizing, scroll support and a two-row mobile action bar.
+- Visible annotation start and Escape cancellation, accessible square announcements and tab keyboard navigation.
+- Clearer evaluation labels, save timestamps and direct mobile analysis/save actions.
+
 ## v2.3.4 · Chess-rule and study-data integrity (phase 1)
 
 - FIDE-style draw handling: three repetitions / 50 moves allow an explicit draw claim; five repetitions / 75 moves are automatic. A player whose flag falls draws when the opponent has no possible mating sequence.

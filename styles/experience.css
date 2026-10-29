@@ -59,6 +59,13 @@ button{touch-action:manipulation}
 .side-panel .micro-button{font-size:14px!important;min-height:40px!important}
 .side-panel #focus-study-editor .variation-item{font-size:14px}
 
+.side-panel .panel-tab{display:flex;align-items:center;justify-content:center;gap:5px;padding-inline:3px}
+.side-panel .panel-tab svg{width:19px;height:19px;stroke-width:2.2;flex:0 0 auto}
+#main-menu-modal .menu-action svg{width:24px;height:24px;flex:0 0 auto}
+@media(min-width:1250px) and (max-width:1450px){
+ #right-panel .panel-tab{font-size:14px!important}
+ #right-panel .panel-tab svg{width:17px;height:17px}
+}
 /* Stable work surface: only the panels' own contents scroll. */
 @media(min-width:1250px){
   :root{--ux-board:min(980px,calc(100dvh - 28px),calc(100vw - 688px))}

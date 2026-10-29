@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant" data-app-version="2.3.4">
+<html lang="zh-Hant" data-app-version="2.3.5">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -9,14 +9,15 @@
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./styles/base.css" />
   <link rel="stylesheet" href="./styles/layout.css" />
-  <link rel="stylesheet" href="./styles/board.css?v=2.3.4" />
-  <link rel="stylesheet" href="./styles/mobile.css?v=2.3.4" />
+  <link rel="stylesheet" href="./styles/board.css?v=2.3.5" />
+  <link rel="stylesheet" href="./styles/mobile.css?v=2.3.5" />
   <link rel="stylesheet" href="./styles/pro.css" />
   <link rel="stylesheet" href="./styles/viewport.css?v=layout-20261030" />
-  <link rel="stylesheet" href="./styles/main-menu.css?v=2.3.4" />
-  <link rel="stylesheet" href="./styles/readability.css?v=2.3.4" />
+  <link rel="stylesheet" href="./styles/main-menu.css?v=2.3.5" />
+  <link rel="stylesheet" href="./styles/readability.css?v=2.3.5" />
   <link rel="stylesheet" href="./styles/focus.css?v=20261030" />
   <link rel="stylesheet" href="./styles/experience.css?v=20261030b" />
+  <link rel="stylesheet" href="./styles/ux-phase2.css?v=2.3.5" />
 </head>
 <body>
   <div class="app-shell" id="app">
@@ -44,7 +45,7 @@
               <div><span>目前局面</span><strong id="stat-phase">開局</strong></div>
             </div>
           </section>
-          <div class="save-actions"><button id="save-game" class="secondary-button" type="button">儲存目前棋局</button><span id="save-status">開局後可隨時儲存</span></div>
+          <div class="save-actions"><button id="save-game" class="secondary-button" type="button">儲存目前棋局</button><span id="save-status" role="status" aria-live="polite">開局後可隨時儲存</span></div>
           <div class="fine-divider"></div>
           <section class="quick-actions">
             <div class="section-kicker">直接操作 · 一次點擊</div>
@@ -76,7 +77,7 @@
           <div class="player-right"><div class="captured-pieces" id="top-captured"></div><div class="clock-display" id="top-clock">10:00</div></div>
           </div>
         </div>
-        <div class="board-stage"><div class="board-frame"><div id="chessboard" class="chessboard" role="group" aria-label="國際象棋棋盤"></div><div class="board-corner tl"></div><div class="board-corner tr"></div><div class="board-corner bl"></div><div class="board-corner br"></div></div></div>
+        <div class="board-stage"><div class="board-frame"><div id="chessboard" class="chessboard" role="group" aria-label="國際象棋棋盤" aria-describedby="board-instructions"></div><span id="board-instructions" class="sr-only">使用方向鍵移動焦點，Enter 或空白鍵選棋與落子。選取後會讀出合法落點。按 Escape 取消選取；標記模式先選起點再選終點。</span><span id="board-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></span><div class="board-corner tl"></div><div class="board-corner tr"></div><div class="board-corner bl"></div><div class="board-corner br"></div></div></div>
         <div class="board-hud-slot" id="board-bottom-slot">
           <div class="player-strip self-strip" id="bottom-player-strip">
             <div class="player-left"><div class="player-avatar light-avatar" id="bottom-avatar">♔</div><div class="player-description"><strong id="bottom-name">你 · 白方</strong><small id="bottom-detail">準備就緒 · YOUR MOVE</small></div></div>
@@ -84,16 +85,16 @@
           </div>
         </div>
         <div class="arena-footbar"><div><span class="mini-glow"></span><span id="turn-message">準備好迎接精彩對局</span></div><span class="keyboard-tip">右鍵畫箭頭 · F 翻轉 · Ctrl+Z 悔棋</span></div>
-        <div class="arena-mobile-actions"><button id="mobile-undo-btn"><span data-icon="undo"></span>悔棋</button><button id="mobile-flip-btn"><span data-icon="refresh"></span>翻轉棋盤</button><button id="mobile-hint-btn"><span data-icon="lightbulb"></span>提示</button><button id="mobile-annotate-btn" type="button" aria-pressed="false">標記</button><button id="focus-return" class="hidden" type="button">返回對局</button></div>
+        <div class="arena-mobile-actions"><button id="mobile-undo-btn"><span data-icon="undo"></span>悔棋</button><button id="mobile-flip-btn"><span data-icon="refresh"></span>翻轉棋盤</button><button id="mobile-hint-btn"><span data-icon="lightbulb"></span>提示</button><button id="mobile-annotate-btn" type="button" aria-pressed="false">標記</button><button id="mobile-analysis-btn" type="button" title="開啟分析工具"><span data-icon="search"></span>分析</button><button id="mobile-save-btn" type="button" title="建立手動存檔"><span data-icon="download"></span>存檔</button><button id="focus-return" class="hidden" type="button">返回對局</button><span id="arena-save-status" class="arena-save-status">尚未開始棋局</span></div>
       </section>
 
       <aside class="side-panel right-panel" id="right-panel" aria-label="棋譜與分析">
         <div class="panel-heading right-heading"><div><div class="eyebrow">GAME CENTER</div><h2>對局中心</h2></div><div class="right-heading-actions"><button class="icon-button" id="export-btn" title="下載 PGN 棋譜" aria-label="下載 PGN 棋譜"><span data-icon="download"></span></button><button class="icon-button close-records" id="close-records" aria-label="關閉對局中心" title="關閉對局中心"><span data-icon="x"></span></button></div></div>
         <div class="panel-tabs" role="tablist" aria-label="棋譜與分析">
-          <button class="panel-tab active" id="tab-moves" role="tab" aria-selected="true" data-tab="moves"><span data-icon="list"></span>棋譜</button>
-          <button class="panel-tab" id="tab-analysis" role="tab" aria-selected="false" data-tab="analysis"><span data-icon="search"></span>分析</button>
-          <button class="panel-tab" id="tab-openings" role="tab" aria-selected="false" data-tab="openings"><span data-icon="book-open"></span>開局</button>
-          <button class="panel-tab" id="tab-training" role="tab" aria-selected="false" data-tab="training"><span data-icon="target"></span>訓練</button>
+          <button class="panel-tab active" id="tab-moves" role="tab" aria-controls="moves-tab" aria-selected="true" tabindex="0" data-tab="moves"><span data-icon="list"></span>棋譜</button>
+          <button class="panel-tab" id="tab-analysis" role="tab" aria-controls="analysis-tab" aria-selected="false" tabindex="-1" data-tab="analysis"><span data-icon="search"></span>分析</button>
+          <button class="panel-tab" id="tab-openings" role="tab" aria-controls="openings-tab" aria-selected="false" tabindex="-1" data-tab="openings"><span data-icon="book-open"></span>開局</button>
+          <button class="panel-tab" id="tab-training" role="tab" aria-controls="training-tab" aria-selected="false" tabindex="-1" data-tab="training"><span data-icon="target"></span>訓練</button>
         </div>
         <div class="panel-body" id="moves-tab" role="tabpanel">
           <div class="notation-header"><span>MOVE HISTORY</span><span id="moves-count">0 PLIES</span></div>
@@ -115,7 +116,7 @@
         </div>
         <div class="panel-body hidden" id="analysis-tab" role="tabpanel">
           <div class="analysis-summary"><span class="section-kicker">STOCKFISH 19 · LOCAL ENGINE</span><span class="analysis-chip" id="analysis-state">等待分析</span></div>
-          <div class="evaluation-card"><div class="eval-polarity"><span>白方優勢</span><strong id="eval-score">—</strong><span>黑方優勢</span></div><div class="eval-meter" aria-label="局面評估"><div class="eval-fill" id="eval-fill"></div></div><div class="eval-depth" id="eval-depth">啟動分析後顯示評分</div></div>
+          <div class="evaluation-card"><div class="eval-polarity"><span>白方優勢</span><strong id="eval-score">—</strong><span>黑方優勢</span></div><div class="eval-meter" aria-label="局面評估"><div class="eval-fill" id="eval-fill"></div></div><div class="eval-depth" id="eval-depth">啟動分析後顯示評分</div><p class="eval-explanation" id="eval-description">評分以白方為基準；正值有利白方，負值有利黑方，M 代表將死距離。</p></div>
           <div class="analysis-controls"><label for="multi-pv">比較路線</label><select id="multi-pv" class="select-field"><option value="1">1 條</option><option value="2">2 條</option><option value="3" selected>3 條 MultiPV</option></select><label for="analysis-time">計算時間</label><select id="analysis-time" class="select-field"><option value="1500">快速 1.5秒</option><option value="4000" selected>精細 4秒</option><option value="8000">深入 8秒</option></select></div>
           <div class="section-kicker analysis-subtitle">候選著法 · ENGINE CANDIDATES</div>
           <div id="pv-line" class="pv-lines" aria-live="polite"><div class="pv-empty">分析後顯示最佳路線、評分、搜索深度與 SAN 著法。</div></div>
@@ -157,7 +158,7 @@
   <div class="modal-backdrop main-menu-backdrop" id="main-menu-modal" role="dialog" aria-modal="true" aria-labelledby="menu-title">
     <div class="main-menu-card">
       <div class="main-menu-top">
-        <div class="main-menu-brand"><span class="brand-mark">♞</span><div><div class="eyebrow">CHESS ATELIER PRO</div><h1 id="menu-title">棋境</h1><p>專業離線西洋棋工作站 <span id="menu-version">v2.3.4</span></p></div></div>
+        <div class="main-menu-brand"><span class="brand-mark">♞</span><div><div class="eyebrow">CHESS ATELIER PRO</div><h1 id="menu-title">棋境</h1><p>專業離線西洋棋工作站 <span id="menu-version">v2.3.5</span></p></div></div>
         <div class="menu-top-controls"><div class="engine-status"><span class="status-dot" id="engine-dot"></span><span id="engine-status">正在載入引擎</span></div><button id="menu-close" class="icon-button" aria-label="返回棋局">✕</button><button id="mobile-settings" class="hidden" aria-hidden="true" tabindex="-1"></button></div>
       </div>
       <div class="main-menu-grid">
@@ -257,6 +258,6 @@
     </div>
   </div>
   <div class="toast-stack" id="toast-stack" role="status" aria-live="polite"></div>
-  <script type="module" src="./src/main.js?v=2.3.4"></script>
+  <script type="module" src="./src/main.js?v=2.3.5"></script>
 </body>
 </html>

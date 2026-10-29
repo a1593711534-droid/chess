@@ -83,14 +83,14 @@ with sync_playwright() as pw:
       page.locator('.square[data-square="e2"]').click();page.locator('.square[data-square="e4"]').click()
       assert page.locator('#moves-count').inner_text()=='1 PLIES'
       page.locator('#focus-open-study').click();page.locator('#tab-moves').click()
-            page.locator('#position-note').fill('Centre control')
+      page.locator('#position-note').fill('Centre control')
       page.locator('#save-note').click();page.locator('#create-variation').click()
       page.locator('.square[data-square="e7"]').click();page.locator('.square[data-square="e5"]').click()
       page.locator('#focus-return').click()
       assert page.locator('.variation-item').count()==1
       # Export/import JSON backups with study branches and comments.
       page.locator('#focus-open-study').click()
-            with page.expect_download() as download_info:
+      with page.expect_download() as download_info:
         page.locator('#download-study').click()
       backup=Path(download_info.value.path()).read_text(encoding='utf-8')
       data=json.loads(backup)
@@ -195,7 +195,7 @@ with sync_playwright() as pw:
   before=page.locator('#bottom-clock').inner_text()
   assert before!='03:00',('first move was not charged',before)
   page.locator('#focus-open-study').click();page.locator('#tab-moves').click()
-    page.locator('#create-variation').click()
+  page.locator('#create-variation').click()
   page.clock.fast_forward(181000)
   page.clock.run_for(300)
   assert page.locator('#bottom-clock').inner_text()=='STUDY'

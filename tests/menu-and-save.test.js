@@ -59,5 +59,5 @@ test('active UI settings are locked; saved game can be continued or manually res
   assert.match(app,/menuVisible\(\)\|\|session\.done/);
   assert.match(app,/saveManualGame\(serializedForSave\(\)\)/);
   assert.match(app,/session\.restore\(saved,\{resumeClock:false\}\)/);
-  assert.match(app,/session\.restore\(manual\.game,\{resumeClock:false\}\)/);
+  assert.match(app,/next\.restore\(manual\.game,\{resumeClock:false\}\)/);
 });

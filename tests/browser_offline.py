@@ -35,6 +35,54 @@ try:
         page.wait_for_function('() => navigator.serviceWorker.controller !== null',timeout=15000)
         page.reload(wait_until='domcontentloaded')
         page.wait_for_selector('.square',timeout=15000)
+        # Malformed JSON must be reported, not silently treated as an absent save.
+        page.evaluate('''() => {
+          localStorage.setItem('chess-atelier-game-v1','{broken');
+          localStorage.setItem('chess-atelier-manual-save-v1','{broken');
+        }''')
+        page.reload(wait_until='domcontentloaded')
+        page.wait_for_selector('.square',timeout=15000)
+        assert '自動存檔損毀' in page.locator('#toast-stack').inner_text()
+        assert '手動存檔：無法解析' in page.locator('#menu-saved-info').inner_text()
+        assert page.locator('#menu-load').is_disabled()
+        page.evaluate('''() => {
+          localStorage.removeItem('chess-atelier-game-v1');
+          localStorage.removeItem('chess-atelier-manual-save-v1');
+        }''')
+        page.reload(wait_until='domcontentloaded')
+        page.wait_for_selector('.square',timeout=15000)
+        # A structurally valid manual save with illegal chess moves must not
+        # overwrite the currently active match before validation completes.
+        page.locator('[data-mode="local"]').click()
+        page.locator('#new-game').click()
+        page.locator('.square[data-square="e2"]').click()
+        page.locator('.square[data-square="e4"]').click()
+        assert page.locator('#moves-count').inner_text()=='1 PLIES'
+        page.evaluate('''() => {
+          const game=JSON.parse(localStorage.getItem('chess-atelier-game-v1'));
+          game.moves=['illegal'];
+          localStorage.setItem('chess-atelier-manual-save-v1',JSON.stringify({version:1,date:new Date().toISOString(),game}));
+        }''')
+        page.locator('#main-menu-open').click()
+        page.locator('#menu-load').click()
+        page.locator('#confirm-yes').click()
+        assert page.locator('#moves-count').inner_text()=='1 PLIES'
+        page.locator('#menu-continue').click()
+        # Reject a damaged variation in imported JSON without changing the game.
+        invalid_backup=page.evaluate('''() => {
+          const game=JSON.parse(localStorage.getItem('chess-atelier-game-v1'));
+          game.study.branches=[{origin:1,fen:'invalid fen',moves:['e7e5']}];
+          return JSON.stringify({format:'chess-atelier-study-v1',game});
+        }''')
+        page.locator('#tab-moves').click()
+        page.locator('#import-pgn').click()
+        page.locator('#pgn-input').fill(invalid_backup)
+        page.locator('#import-confirm').click()
+        assert '變例無效' in page.locator('#import-error').inner_text()
+        assert page.locator('#moves-count').inner_text()=='1 PLIES'
+        page.locator('#import-cancel').click()
+        assert not errors,errors
+        print('CORRUPT AUTO/MANUAL SAVE AND STUDY IMPORT SAFETY OK',flush=True)
         context.set_offline(True)
         page.reload(wait_until='domcontentloaded')
         page.wait_for_selector('.square',timeout=15000)

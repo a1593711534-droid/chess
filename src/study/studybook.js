@@ -1,12 +1,21 @@
 import {Chess} from '../../vendor/chess.js';
 export class StudyBook{
-  constructor(source){this.notes={};this.marks={};this.branches=[];if(source)this.load(source);}
-  load(raw){
-    if(!raw||typeof raw!=='object')return;
+  constructor(source,{strict=false}={}){this.notes={};this.marks={};this.branches=[];if(source)this.load(source,{strict});}
+  load(raw,{strict=false}={}){
+    if(!raw||typeof raw!=='object'){
+      if(strict)throw Error('研究備份缺少研究資料');
+      return;
+    }
+    if(strict){
+      if(!raw.notes||typeof raw.notes!=='object'||Array.isArray(raw.notes)||!raw.marks||typeof raw.marks!=='object'||Array.isArray(raw.marks)||!Array.isArray(raw.branches))throw Error('研究備份資料結構不完整');
+      if(Object.entries(raw.notes).some(([k,v])=>!/^[0-9]{1,4}$/.test(k)||typeof v!=='string'||v.length>500))throw Error('研究備份包含無效或過長的註解');
+      if(Object.entries(raw.marks).some(([k,v])=>!/^[0-9]{1,4}$/.test(k)||!Array.isArray(v)||v.length>24||v.some(mark=>!/^[a-h][1-8]$/.test(mark?.from)||!/^[a-h][1-8]$/.test(mark?.to))))throw Error('研究備份包含無效的棋盤標記');
+    }
     this.notes=Object.fromEntries(Object.entries(raw.notes||{}).filter(([k,v])=>/^\d{1,4}$/.test(k)&&typeof v==='string').map(([k,v])=>[k,v.slice(0,500)]));
     this.marks=Object.fromEntries(Object.entries(raw.marks||{}).filter(([k,a])=>/^\d{1,4}$/.test(k)&&Array.isArray(a)).map(([k,a])=>[k,a.filter(m=>/^[a-h][1-8]$/.test(m?.from)&&/^[a-h][1-8]$/.test(m?.to)).slice(0,24)]));
-    this.branches=[];for(const item of (Array.isArray(raw.branches)?raw.branches:[])){
-      try{this.addBranch(item.origin,item.fen,item.moves);}catch{/* ignore damaged saved variation */}
+    this.branches=[];for(const [index,item] of (Array.isArray(raw.branches)?raw.branches:[]).entries()){
+      try{this.addBranch(item.origin,item.fen,item.moves);}
+      catch(error){if(strict)throw Error(`研究備份第 ${index+1} 個變例無效：${error.message}`);}
     }
   }
   setNote(ply,text){const key=String(ply);if(typeof text!=='string')return;if(text.trim())this.notes[key]=text.trim().slice(0,500);else delete this.notes[key];}

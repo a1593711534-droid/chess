@@ -1,3 +1,11 @@
+## v2.3.3 · Save recovery and engine cancellation improvements
+
+- Corrupt localStorage records are now distinguished from missing saves and the menu reports manual-save corruption.
+- Restoring a manual save validates it before changing the active game. Full study backup imports reject damaged branches rather than dropping them silently.
+- Interrupted Stockfish searches have a bounded cancellation watchdog. Stop analysis can retain the partial result already shown.
+- Mobile chessboard annotation mode disables piece dragging and main-menu keyboard focus returns to the opener.
+- Includes new Node and real localhost Chromium regressions covering save corruption and import safety.
+
 ## v2.3.2 · Study backup, UI state and reliability fixes
 
 - The study JSON backup contains moves, clock state, notes, annotations and every saved variation. Paste its contents into the PGN/backup import dialog to restore it; normal PGN export contains only the main line.

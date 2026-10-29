@@ -6,13 +6,13 @@ import {moveToUci,pvToSan,scoreWhite} from './chess/notation.js';
 import {fallbackMove} from './chess/fallback.js';
 import {createBoard,pieceSrc} from './ui/board.js';
 import {toast} from './ui/toast.js';
-import {loadPrefs,savePrefs,loadSavedGame,saveGame,loadManualGame,saveManualGame} from './utils/preferences.js';
+import {loadPrefs,savePrefs,inspectSavedGame,inspectManualGame,saveGame,saveManualGame} from './utils/preferences.js';
 import {playSound} from './utils/sound.js';
 import {decorateIcons} from './utils/icons.js';
 import {OPENINGS,openingFor,continuations,openingGame} from './data/openings.js';
 import {PUZZLES,CATEGORIES,readTrainingStats,recordPuzzle} from './data/puzzles.js';
 import {TrainingSession} from './study/training.js';
-import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.2';
+import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.3';
 
 const $=id=>document.getElementById(id);
 let prefs=loadPrefs();
@@ -29,7 +29,7 @@ let promotion=null,confirmCallback=null;
 let engineError=null;
 let engine=null;
 let board=null;
-let menuEditing=true,sessionActive=false,menuPauseSide=null;
+let menuEditing=true,sessionActive=false,menuPauseSide=null,menuFocusBeforeOpen=null;
 const menuVisible=()=>!$('main-menu-modal').classList.contains('hidden');
 function ensureEngine(){
   if(!engine||engine.state==='error'){
@@ -114,22 +114,23 @@ function serializedForSave(){
   return data;
 }
 function save(){
-  if(!sessionActive)return;
+  if(!sessionActive)return false;
   const ok=saveGame(serializedForSave());
   if(ok){autoSaveWarningShown=false;$('save-status').textContent='自動儲存正常';}
   else{
     $('save-status').textContent='自動儲存失敗 · 請下載備份';
     if(!autoSaveWarningShown){autoSaveWarningShown=true;toast('瀏覽器無法自動儲存：請立即下載完整研究備份。','error');}
   }
+  return ok;
 }
 function updateSaveInfo(){
-  const manual=loadManualGame();
-  $('menu-load').disabled=!manual?.game;
+  const {value:manual,corrupted:manualCorrupt}=inspectManualGame();
+  $('menu-load').disabled=!manual?.game||manualCorrupt;
   $('menu-save').disabled=!sessionActive;
   $('menu-continue').disabled=!sessionActive;
   $('menu-close').disabled=!sessionActive;
   const last=manual?.date?new Date(manual.date).toLocaleString('zh-TW'):'未建立';
-  $('menu-saved-info').textContent=`自動存檔：${sessionActive?`${session.ply} 步 · ${session.done?'本局已結束':'可繼續'}`:'尚未建立'}\n手動存檔：${last}`;
+  $('menu-saved-info').textContent=`自動存檔：${sessionActive?`${session.ply} 步 · ${session.done?'本局已結束':'可繼續'}`:'尚未建立'}\n手動存檔：${manualCorrupt?'無法解析（請使用完整研究備份）':last}`;
 }
 function setMenuEditing(editing){
   menuEditing=editing;
@@ -140,6 +141,7 @@ function setMenuEditing(editing){
 }
 function openMainMenu(){
   if(!menuVisible()){
+    menuFocusBeforeOpen=document.activeElement;
     cancelSearch();
     menuPauseSide=session.clock.active;
     session.clock.pause();
@@ -155,6 +157,8 @@ function openMainMenu(){
 function closeMainMenu(){
   if(!sessionActive)return;
   $('main-menu-modal').classList.add('hidden');
+  const priorFocus=menuFocusBeforeOpen;menuFocusBeforeOpen=null;
+  (priorFocus?.isConnected?priorFocus:$('main-menu-open')).focus({preventScroll:true});
   if(menuEditing){prefs={...prefs,...session.config,side:prefs.side==='random'?'random':session.config.side,sound:prefs.sound};renderSettings();}
   setMenuEditing(false);
   const resumeSide=menuPauseSide||(session.ply===0?session.game.turn():null);
@@ -172,9 +176,14 @@ function saveManual(){
   }else toast('無法寫入存檔，請檢查瀏覽器儲存空間或隱私模式。','error');
 }
 function loadManual(){
-  const manual=loadManualGame();if(!manual?.game)return;
+  const {value:manual,corrupted}=inspectManualGame();
+  if(corrupted){toast('手動存檔無法解析。原棋局沒有變更，請使用完整研究備份還原。','error');return;}
+  if(!manual?.game)return;
   const restore=()=>{
-    try{cancelSearch();session=new ChessSession(manual.game.config);session.restore(manual.game,{resumeClock:false});
+    try{
+      // Validate the entire save before touching the active match.
+      const next=new ChessSession(manual.game.config);next.restore(manual.game,{resumeClock:false});
+      cancelSearch();session=next;
       sessionActive=true;menuPauseSide=manual.game.clock?.active||null;
       $('position-note').dataset.ply='';usingFallback=false;
       prefs={...prefs,...manual.game.config,side:prefs.side==='random'?'random':manual.game.config.side};renderSettings();
@@ -185,9 +194,9 @@ function loadManual(){
   if(sessionActive&&!session.done)showConfirm('載入手動存檔？','目前棋局會被手動存檔取代。',restore,'載入');
   else restore();
 }
-function cancelSearch(){
+function cancelSearch({preserveAnalysis=false}={}){
   botSequence++;analysisSequence++;engine?.cancel();thinking=false;analysisRunning=false;
-  analysisInfo=null;analysisFen=null;analysisLines=new Map();
+  if(!preserveAnalysis){analysisInfo=null;analysisFen=null;analysisLines=new Map();}
   const b=$('stop-analysis');if(b)b.disabled=true;
   if(board&&$('analysis-state'))renderAnalysis();
 }
@@ -273,7 +282,11 @@ function beginVariation(){
 }
 function finishVariation(){
   if(!variation)return;
-  if(variation.moves.length){try{session.study.addBranch(variation.origin,variation.fen,variation.moves);toast('已儲存變例，可在棋譜頁面再次開啟。');save();}catch(e){toast(`變例尚未儲存：${e.message}。目前變例仍在，可先複製 PGN。`,'error');return;}}
+  if(variation.moves.length){try{
+    session.study.addBranch(variation.origin,variation.fen,variation.moves);
+    if(save())toast('已儲存變例，可在棋譜頁面再次開啟。');
+    else toast('變例僅保留在目前分頁，請立即下載完整研究備份。','error');
+  }catch(e){toast(`變例尚未儲存：${e.message}。目前變例仍在，可先複製 PGN。`,'error');return;}}
   variation=null;restoreClockFromStudy(clockBeforeVariation);clockBeforeVariation=null;
   render();save();resumeBotIfNeeded();
 }
@@ -540,15 +553,18 @@ function importPgn(){
   try{
     const text=$('pgn-input').value.trim();if(!text)throw new Error('請先貼上 PGN 棋譜。');
     const isBackup=text.startsWith('{')&&text.includes('"chess-atelier-study-v1"');
-    let next;
+    let next,importedActiveSide=null;
     if(isBackup){
       const data=JSON.parse(text);
       if(data.format!=='chess-atelier-study-v1'||!data.game||typeof data.game.config!=='object')throw Error('研究備份格式無效');
-      next=new ChessSession(data.game.config);next.restore(data.game,{resumeClock:true});
+      next=new ChessSession(data.game.config);
+      next.restore(data.game,{resumeClock:!menuVisible(),strictStudy:true});
+      importedActiveSide=data.game.clock?.active||null;
     }else{next=new ChessSession({...prefs,mode:'local',time:'none'});next.importPgn(text);}
     cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=next;
     $('position-note').dataset.ply='';flipped=isBackup&&session.config.mode==='ai'&&session.config.side==='b';
-    menuPauseSide=null;usingFallback=false;lastHint=null;analysisInfo=null;analysisFen=null;
+    menuPauseSide=isBackup&&menuVisible()?importedActiveSide:null;
+    usingFallback=false;lastHint=null;analysisInfo=null;analysisFen=null;
     if(mobileAnnotating){mobileAnnotating=false;board.setAnnotationMode(false);$('mobile-annotate-btn').setAttribute('aria-pressed','false');$('mobile-annotate-btn').textContent='標記';}
     prefs={...prefs,...next.config,side:isBackup?next.config.side:prefs.side,mode:next.config.mode,time:next.config.time};
     savePrefs(prefs);renderSettings();closeModal('import-modal');
@@ -642,7 +658,7 @@ function bindActions(){
   $('nav-start').onclick=()=>navigate('first');$('nav-prev').onclick=()=>navigate('prev');$('nav-next').onclick=()=>navigate('next');$('nav-end').onclick=()=>navigate('last');
   document.querySelectorAll('.panel-tab').forEach(b=>b.onclick=()=>openRightPanel(b.dataset.tab));
   $('analyze-btn').onclick=()=>analyze(false);$('hint-btn').onclick=()=>analyze(true);
-  $('stop-analysis').onclick=()=>{cancelSearch();toast('已停止計算。','info');};
+  $('stop-analysis').onclick=()=>{cancelSearch({preserveAnalysis:true});toast('已停止計算，保留目前取得的分析結果。','info');};
   $('position-note').addEventListener('input',()=>{
     const ply=Number($('position-note').dataset.ply);
     if(!Number.isInteger(ply))return;
@@ -707,7 +723,7 @@ function init(){
   }
 }
 function startApplication(){
-  const saved=loadSavedGame();let invalidSave=false;
+  const {value:saved,corrupted}=inspectSavedGame();let invalidSave=corrupted;
   if(saved){try{session.restore(saved,{resumeClock:false});sessionActive=true;
     menuPauseSide=saved.clock?.active||null;
     prefs={...prefs,...saved.config,side:prefs.side==='random'?'random':saved.config.side};flipped=session.config.mode==='ai'&&session.config.side==='b';

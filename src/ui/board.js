@@ -39,8 +39,8 @@ export function createBoard(container,onMove,onSelect,onAnnotate){
       if(p&&possible.includes(sq))button.classList.add('occupied');
       button.tabIndex=(focusedSquare||selected||(reverse?'e8':'e1'))===sq?0:-1;
        button.setAttribute('aria-label',`${sq}${p?` ${p.color==='w'?'白方':'黑方'}${displayName[p.type]}`:''}`);
-      if(p){const image=document.createElement('img');image.className='piece-image';image.alt='';image.draggable=!locked&&p.color===view.turn();image.src=pieceSrc(p.type,p.color);
-        image.addEventListener('dragstart',e=>{if(locked||p.color!==view.turn()){e.preventDefault();return;}dragging=sq;selected=sq;possible=view.moves({square:sq,verbose:true}).map(m=>m.to);
+      if(p){const image=document.createElement('img');image.className='piece-image';image.alt='';image.draggable=!annotationMode&&!locked&&p.color===view.turn();image.src=pieceSrc(p.type,p.color);
+        image.addEventListener('dragstart',e=>{if(annotationMode||locked||p.color!==view.turn()){e.preventDefault();return;}dragging=sq;selected=sq;possible=view.moves({square:sq,verbose:true}).map(m=>m.to);
            onSelect?.(sq);button.classList.add('selected');
            for(const dest of possible)container.querySelector(`[data-square="${dest}"]`)?.classList.add('possible');
            e.dataTransfer.setData('text/plain',sq);e.dataTransfer.effectAllowed='move';});
@@ -63,9 +63,9 @@ export function createBoard(container,onMove,onSelect,onAnnotate){
       button.addEventListener('contextmenu',e=>e.preventDefault());
       button.addEventListener('pointerdown',e=>{if(e.button===2)markStart=sq;});
       button.addEventListener('pointerup',e=>{if(e.button===2&&markStart){onAnnotate?.(markStart,sq);markStart=null;}});
-      button.addEventListener('dragover',e=>{if(!locked&&dragging&&possible.includes(sq)){e.preventDefault();e.dataTransfer.dropEffect='move';button.classList.add('drag-target');}});
+      button.addEventListener('dragover',e=>{if(!annotationMode&&!locked&&dragging&&possible.includes(sq)){e.preventDefault();e.dataTransfer.dropEffect='move';button.classList.add('drag-target');}});
       button.addEventListener('dragleave',()=>button.classList.remove('drag-target'));
-      button.addEventListener('drop',e=>{e.preventDefault();button.classList.remove('drag-target');if(!locked&&dragging){const from=dragging;dragging=null;if(from&&possible.includes(sq)){selected=null;possible=[];onMove(from,sq);}else setSelection(null);}});
+      button.addEventListener('drop',e=>{e.preventDefault();button.classList.remove('drag-target');if(!annotationMode&&!locked&&dragging){const from=dragging;dragging=null;if(from&&possible.includes(sq)){selected=null;possible=[];onMove(from,sq);}else setSelection(null);}});
       fragment.append(button);
     }
     container.append(fragment);

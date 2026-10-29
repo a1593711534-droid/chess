@@ -74,3 +74,13 @@ test('engine loads lazily, and landscape UI permits scrolling',()=>{
   assert.match(mobileCss,/@media\(max-width:740px\) and \(max-height:500px\)/);
   assert.match(mobileCss,/overflow-y:auto/);
 });
+
+test('offline shell and on-demand engine cache are deployed together',()=>{
+  const sw=readFileSync(new URL('../sw.js',import.meta.url),'utf8');
+  const deploy=readFileSync(new URL('../.github/workflows/deploy-pages.yml',import.meta.url),'utf8');
+  assert.match(app,/navigator\.serviceWorker\.register\('\.\/sw\.js'\)/);
+  assert.match(sw,/self\.addEventListener\('install'/);
+  assert.match(sw,/self\.addEventListener\('fetch'/);
+  assert.match(sw,/stockfish-19-single\.wasm/);
+  assert.match(deploy,/cp -R index\.html sw\.js src/);
+});

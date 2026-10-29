@@ -63,7 +63,8 @@ test('navigation and study mode return paths re-queue an interrupted bot search'
 test('piece drag cannot be prevented by pointer-events none or mid-drag rerender',()=>{
   assert.match(boardCss,/\.piece-image\{[^}]*pointer-events:auto/);
   assert.doesNotMatch(board,/dragging=sq;setSelection\(sq\)/);
-  assert.match(board,/button\.addEventListener\('keydown'/);
+  assert.match(board,/button\.onkeydown=event=>/);
+  assert.doesNotMatch(board,/container\.innerHTML=''/);
   assert.match(board,/focusedSquare/);
 });
 

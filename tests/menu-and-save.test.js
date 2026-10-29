@@ -54,8 +54,9 @@ test('resuming suspended clock does not spend time in menu or while page is clos
   assert.equal(clock.active,'w');
   clock.pause();
 });
-test('active UI settings are locked; saved game can be continued or manually restored',()=>{
-  assert.match(app,/setMenuEditing\(!sessionActive\)/);
+test('active game configuration stays unchanged while the new-game menu is editable in one step',()=>{
+  assert.match(app,/setMenuEditing\(true\)/);
+  assert.match(app,/\$\('menu-start-shortcut'\)\.onclick=showNewGame/);
   assert.match(app,/menuVisible\(\)\|\|session\.done/);
   assert.match(app,/saveManualGame\(serializedForSave\(\)\)/);
   assert.match(app,/session\.restore\(saved,\{resumeClock:false\}\)/);

@@ -75,7 +75,7 @@ try:
           return JSON.stringify({format:'chess-atelier-study-v1',game});
         }''')
         page.locator('#focus-open-study').click();page.locator('#tab-moves').click()
-                page.locator('#import-pgn').click()
+        page.locator('#import-pgn').click()
         page.locator('#pgn-input').fill(invalid_backup)
         page.locator('#import-confirm').click()
         assert '變例無效' in page.locator('#import-error').inner_text()

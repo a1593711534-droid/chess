@@ -40,6 +40,25 @@ with sync_playwright() as pw:
       assert abs(menu['x'])<1 and abs(menu['y'])<1 and abs(menu['width']-width)<2 and abs(menu['height']-height)<2,menu
     page.locator('#new-game').click()
     page.wait_for_timeout(200)
+    # Player identity and clock must be REAL children of each moved card, not
+    # visual empty placeholder cards with their contents left inside hidden slots.
+    for pos in ['top','bottom']:
+      card=page.locator(f'#{pos}-player-strip')
+      assert card.locator(f'#{pos}-name').count()==1, ('player name outside card',width,pos)
+      assert card.locator(f'#{pos}-clock').count()==1, ('clock outside card',width,pos)
+      assert card.locator(f'#{pos}-name').inner_text().strip(), ('empty player name',width,pos)
+      assert card.locator(f'#{pos}-clock').inner_text().strip(), ('empty player clock',width,pos)
+      assert card.locator(f'#{pos}-name').is_visible(), ('name not visible',width,pos)
+      assert card.locator(f'#{pos}-clock').is_visible(), ('clock not visible',width,pos)
+      box=card.locator(f'#{pos}-clock').bounding_box()
+      assert box and box['width']>=40 and box['height']>=20,('clock not painted',width,pos,box)
+      if width>=1250:
+        assert card.evaluate("(node)=>node.parentElement.id")=='match-hud',('not docked',width,pos)
+        assert page.locator('#setup-panel').evaluate(
+          "(panel,position)=>{const clock=document.querySelector('#'+position+'-clock').getBoundingClientRect(),rect=panel.getBoundingClientRect();return clock.left>=rect.left&&clock.right<=rect.right&&clock.top>=rect.top&&clock.bottom<=rect.bottom}",pos
+        ),('clock outside sidebar',width,pos)
+      if width<=740:
+        assert card.evaluate("(node)=>node.parentElement.id")==f'board-{pos}-slot',('mobile clock not in board slot',width,pos)
     if width==1440:
       assert page.locator('#setup-panel').is_visible() and page.locator('#right-panel').is_visible()
       initial=page.locator('#chessboard').bounding_box()

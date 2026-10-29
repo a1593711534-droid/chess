@@ -463,3 +463,15 @@ button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-v
 @media(prefers-reduced-motion:reduce){
   .records-trigger,.arena-mobile-actions button{transition:none}
 }
+
+/* On wide screens the study and match drawers dock beside the board.
+   No scrim: users can inspect and operate the board while analyzing. */
+@media(min-width:1051px){
+  .app-shell:has(#right-panel.mobile-visible) .workspace{
+    padding-right:min(444px,36vw);
+  }
+  .app-shell:has(#setup-panel.mobile-visible) .workspace{
+    padding-left:min(404px,34vw);
+  }
+  .mobile-scrim:not(.hidden){display:none}
+}

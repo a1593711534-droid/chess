@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#11181d" />
+  <meta name="theme-color" content="#f6f5f1" />
   <meta name="description" content="棋境 Chess Atelier · 完全離線的專業西洋棋對弈空間，搭載 Stockfish 19。" />
   <title>CHESS ATELIER PRO — 離線旗艦棋藝工作站</title>
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
@@ -15,13 +15,14 @@
   <link rel="stylesheet" href="./styles/viewport.css?v=layout-20261030" />
   <link rel="stylesheet" href="./styles/main-menu.css?v=2.3.3" />
   <link rel="stylesheet" href="./styles/readability.css?v=2.3.3" />
+  <link rel="stylesheet" href="./styles/focus.css?v=20261030" />
 </head>
 <body>
   <div class="app-shell" id="app">
 
     <main class="workspace">
       <aside class="side-panel setup-panel" id="setup-panel" aria-label="對局設定">
-        <div class="panel-heading match-panel-heading"><div><div class="eyebrow">LIVE MATCH</div><h2>目前棋局</h2></div><button class="secondary-button menu-entry" id="main-menu-open" type="button">☰ 主選單</button></div>
+        <div class="panel-heading match-panel-heading"><div><div class="eyebrow">LIVE MATCH</div><h2>目前棋局</h2></div><div class="focus-panel-actions"><button class="secondary-button menu-entry" id="main-menu-open" type="button">新對局</button><button class="icon-button focus-drawer-close" id="focus-close-match" type="button" aria-label="關閉對局資訊">✕</button></div></div>
         <div class="panel-scroll">
           <section class="active-settings-card" aria-label="本局設定">
             <div class="section-kicker">LOCKED MATCH SETTINGS · 已鎖定</div>
@@ -58,8 +59,8 @@
 
       <section class="arena" aria-label="西洋棋棋盤">
         <div class="arena-header">
-          <div class="arena-heading"><span class="overline-dot"></span><span id="arena-type">STOCKFISH MATCH</span></div>
-          <div class="arena-header-right"><button class="records-trigger arena-menu-shortcut" id="mobile-main-menu" type="button">☰ 主選單</button><span class="round-caption" id="round-caption">經典對局 · STANDARD CHESS</span><button class="records-trigger" id="show-records"><span data-icon="list"></span>對局中心</button></div>
+          <div class="arena-heading"><span class="focus-brand">♞ <span>棋境</span></span><span class="focus-divider"></span><span id="arena-type">STOCKFISH MATCH</span></div>
+          <div class="arena-header-right"><button class="records-trigger focus-match-trigger" id="focus-match" type="button" aria-controls="setup-panel" aria-expanded="false">對局</button><button class="records-trigger arena-menu-shortcut" id="mobile-main-menu" type="button">新對局</button><span class="round-caption" id="round-caption">經典對局 · STANDARD CHESS</span><button class="records-trigger focus-study-trigger" id="show-records" type="button" aria-controls="right-panel" aria-expanded="false"><span data-icon="list"></span>研究</button></div>
         </div>
         <div class="player-strip opponent-strip" id="top-player-strip">
           <div class="player-left"><div class="player-avatar dark-avatar" id="top-avatar">♚</div><div class="player-description"><strong id="top-name">Stockfish 19</strong><small id="top-detail">引擎對手 · CLUB</small></div></div>
@@ -85,13 +86,13 @@
         <div class="panel-body" id="moves-tab" role="tabpanel">
           <div class="notation-header"><span>MOVE HISTORY</span><span id="moves-count">0 PLIES</span></div>
           <div class="moves-list" id="moves-list" aria-live="polite"><div class="empty-state"><span class="empty-mark">♞</span><strong>棋局尚未開始</strong><small>每一步精彩著法，將在此完整記錄。</small></div></div>
-          <div class="study-editor">
-            <div class="study-editor-head"><span class="section-kicker">STUDY NOTES · 棋譜註解</span><span id="note-position">初始局面</span></div>
+          <details class="study-editor" id="focus-study-editor">
+            <summary class="study-editor-head"><span class="section-kicker">註解與變例</span><span id="note-position">初始局面</span></summary>
             <textarea id="position-note" rows="2" maxlength="500" placeholder="對目前著法加入筆記；會保存並寫入 PGN 註解…"></textarea>
             <div class="study-actions"><button id="save-note" class="micro-button">儲存註解</button><button id="create-variation" class="micro-button">從此建立變例</button></div>
             <div class="variation-strip hidden" id="variation-strip"><strong id="variation-title">變例探索中</strong><span id="variation-moves"></span><div class="variation-controls"><button class="micro-button" id="export-variation">複製分支 PGN</button><button class="micro-button" id="finish-variation">儲存變例並返回</button></div></div>
             <div id="variation-list" class="variation-list"></div>
-          </div>
+          </details>
           <div class="record-navigation">
             <button class="icon-button" id="nav-start" aria-label="回到初始局面" title="回到初始局面"><span data-icon="skip-back"></span></button>
             <button class="icon-button" id="nav-prev" aria-label="上一步" title="上一步"><span data-icon="chevron-left"></span></button>
@@ -126,11 +127,11 @@
           <div class="source-disclosure">這是精選訓練路線；多手題的回應為預設教學著法，不代表唯一強制變例。</div>
         </div>
         <div class="right-bottom">
-          <div class="fine-divider"></div>
-          <div class="section-kicker">GAME FILES</div>
+          <details class="focus-files"><summary>匯入與匯出</summary>
           <button class="file-action" id="copy-fen"><span data-icon="copy"></span><span>複製目前局面 FEN</span><span class="file-chevron">↗</span></button>
           <button class="file-action" id="copy-pgn"><span data-icon="clipboard"></span><span>複製主線棋譜 PGN</span><span class="file-chevron">↗</span></button>
           <button class="file-action" id="download-study"><span data-icon="download"></span><span>下載完整研究備份 JSON</span><span class="file-chevron">↗</span></button><button class="file-action" id="import-pgn"><span data-icon="upload"></span><span>匯入 PGN／研究備份</span><span class="file-chevron">↗</span></button>
+          </details>
           <div class="right-copyright">CHESS ATELIER PRO <span>✦</span> OFFLINE 2026</div>
         </div>
       </aside>
@@ -144,12 +145,12 @@
   <div class="modal-backdrop main-menu-backdrop" id="main-menu-modal" role="dialog" aria-modal="true" aria-labelledby="menu-title">
     <div class="main-menu-card">
       <div class="main-menu-top">
-        <div class="main-menu-brand"><span class="brand-mark">♞</span><div><div class="eyebrow">CHESS ATELIER PRO</div><h1 id="menu-title">棋境 · 主選單</h1><p>專業離線西洋棋工作站 <span id="menu-version">v2.3.3</span></p></div></div>
+        <div class="main-menu-brand"><span class="brand-mark">♞</span><div><div class="eyebrow">CHESS ATELIER PRO</div><h1 id="menu-title">棋境</h1><p>專業離線西洋棋工作站 <span id="menu-version">v2.3.3</span></p></div></div>
         <div class="menu-top-controls"><div class="engine-status"><span class="status-dot" id="engine-dot"></span><span id="engine-status">正在載入引擎</span></div><button id="menu-close" class="icon-button" aria-label="返回棋局">✕</button><button id="mobile-settings" class="hidden" aria-hidden="true" tabindex="-1"></button></div>
       </div>
       <div class="main-menu-grid">
         <div class="menu-config">
-          <div class="menu-head"><div><div class="eyebrow">NEW MATCH</div><h2>新對局設定</h2></div><span id="menu-lock-badge">對局進行中 · 已鎖定</span></div>
+          <div class="menu-head"><div><div class="eyebrow">NEW MATCH</div><h2>開始一場棋局</h2></div><span id="menu-lock-badge">對局進行中 · 已鎖定</span></div>
           <div class="menu-form" id="menu-form">          <section class="section-block">
             <div class="field-label">對弈模式</div>
             <div class="segmented" id="mode-select" role="group" aria-label="對弈模式">
@@ -202,7 +203,7 @@
               <option value="30+0">30 分鐘 · 慢棋</option>
             </select>
           </section>
-          <section class="section-block" id="ai-time-mode-section">
+          <details class="focus-advanced"><summary>進階 · AI 時間管理</summary><section class="section-block" id="ai-time-mode-section">
             <div class="field-label">AI 時間管理 <span class="field-sub">與棋力獨立</span></div>
             <select id="ai-time-mode" class="select-field" aria-label="AI 時間管理方式">
               <option value="adaptive" selected>智能分配 · 依棋鐘與局面</option>
@@ -222,15 +223,15 @@
               <option value="30000">30 秒 · 深入</option>
             </select>
           </section>
-          <div class="menu-setting-note"><span id="ai-time-note">Stockfish 依剩餘棋鐘及加秒自動分配每步搜尋時間。</span><br>設定只在新對局開始時套用；開始後鎖定。棋鐘時間耗盡仍會判負。</div>
+          <div class="menu-setting-note"><span id="ai-time-note">Stockfish 依剩餘棋鐘及加秒自動分配每步搜尋時間。</span><br>設定只在新對局開始時套用；開始後鎖定。棋鐘時間耗盡仍會判負。</div></details>
           <button class="primary-button" id="new-game"><span data-icon="plus"></span>開始新對局<span class="primary-arrow">↗</span></button>
 </div>
         </div>
         <div class="menu-saves">
-          <div class="eyebrow">CONTINUE & SAVE</div><h2>繼續棋局</h2>
+          <div class="eyebrow">CONTINUE & SAVE</div><h2>上次的棋局</h2>
           <p>離開頁面也會自動保存進度；按「儲存棋局」可另外建立一份手動存檔。</p>
           <div id="menu-saved-info" class="save-slot-info">尚無存檔</div>
-          <button class="secondary-button menu-action" id="menu-continue" type="button">繼續目前棋局</button>
+          <button class="primary-button menu-action" id="menu-continue" type="button">繼續目前棋局</button>
           <button class="secondary-button menu-action" id="menu-load" type="button">載入手動存檔</button>
           <button class="secondary-button menu-action" id="menu-save" type="button">儲存目前棋局</button>
           <div class="menu-divider"></div>

@@ -571,7 +571,7 @@ function importPgn(){
     if(mobileAnnotating){mobileAnnotating=false;board.setAnnotationMode(false);$('mobile-annotate-btn').setAttribute('aria-pressed','false');$('mobile-annotate-btn').textContent='標記';}
     prefs={...prefs,...next.config,side:isBackup?next.config.side:prefs.side,mode:next.config.mode,time:next.config.time};
     savePrefs(prefs);renderSettings();closeModal('import-modal');
-    sessionActive=true;render();save();toast(`已載入 ${session.ply} 步${isBackup?'研究備份':'棋譜'}。`);closeDrawers();
+    sessionActive=true;render();save();toast(`已載入 ${session.ply} 步${isBackup?'研究備份':'棋譜'}。`);closeDrawers();if(menuVisible())closeMainMenu();
   }catch(e){$('import-error').textContent=`匯入失敗：${e.message||'PGN 格式不正確'}`;}
 }
 // Only a viewport breakpoint may change the permanent HUD's placement.
@@ -668,6 +668,7 @@ function bindActions(){
   $('menu-close').onclick=closeMainMenu;$('menu-continue').onclick=closeMainMenu;
   $('menu-new').onclick=()=>setMenuEditing(true);
   $('menu-start-shortcut').onclick=showNewGame;
+  $('menu-import').onclick=()=>{$('pgn-input').value='';$('import-error').textContent='';openModal('import-modal');};
   $('menu-save').onclick=saveManual;$('save-game').onclick=saveManual;$('menu-load').onclick=loadManual;
   $('new-game').onclick=showNewGame;$('undo-btn').onclick=doUndo;$('flip-btn').onclick=flipBoard;
   $('mobile-undo-btn').onclick=doUndo;$('mobile-flip-btn').onclick=flipBoard;$('mobile-hint-btn').onclick=()=>analyze(true);

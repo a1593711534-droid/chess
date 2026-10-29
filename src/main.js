@@ -12,7 +12,7 @@ import {decorateIcons} from './utils/icons.js';
 import {OPENINGS,openingFor,continuations,openingGame} from './data/openings.js';
 import {PUZZLES,CATEGORIES,readTrainingStats,recordPuzzle} from './data/puzzles.js';
 import {TrainingSession} from './study/training.js';
-import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.2';
+import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.3';
 
 const $=id=>document.getElementById(id);
 let prefs=loadPrefs();

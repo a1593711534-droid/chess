@@ -1,3 +1,11 @@
+## v2.3.3 — Save corruption safety and better engine interruption recovery
+
+- Detect invalid JSON auto/manual saves and avoid overwriting an active game on failed manual restore.
+- Strictly validate full study imports before accepting any branches or annotations.
+- Add a 3.5 s Stockfish cancellation watchdog and retain partial analysis when stopped.
+- Prevent accidental drag moves during touch annotation and return keyboard focus after closing the menu.
+- Expand real-browser and Node regression testing; update offline cache.
+
 ## v2.3.2 — Audit bug fixes and complete study backups
 
 - Safeguarded study variations and browser auto-save, with JSON backup roundtrips.

@@ -29,7 +29,7 @@ let training=null,variation=null,trainingToken=0,clockBeforeTraining=null,clockB
 let openingFilter='all',puzzleFilter='全部';
 let promotion=null,confirmCallback=null;
 let engineError=null;
-let engine=null;
+let engine=null,engineLoadingClockSide=null;
 let board=null,renderNotationView=null;
 let openingRenderKey=null,trainingRenderKey=null;
 let menuEditing=true,sessionActive=false,menuPauseSide=null,menuFocusBeforeOpen=null;
@@ -217,6 +217,13 @@ function loadManual(){
   else restore();
 }
 function cancelSearch({preserveAnalysis=false}={}){
+  // If a Worker load was interrupted, restore its paused turn clock before
+  // callers snapshot the match for menus, study or undo.
+  if(engineLoadingClockSide){
+    if(sessionActive&&!session.done&&session.clock.enabled&&!session.clock.timeout&&!menuVisible())
+      session.clock.resume(engineLoadingClockSide);
+    engineLoadingClockSide=null;
+  }
   botSequence++;analysisSequence++;engine?.cancel();thinking=false;analysisRunning=false;
   if(!preserveAnalysis){analysisInfo=null;analysisFen=null;analysisLines=new Map();}
   const b=$('stop-analysis');if(b)b.disabled=true;
@@ -357,7 +364,19 @@ async function runBot(){
   thinking=true;analysisLines=new Map();analysisInfo=null;analysisFen=null;render();
   let uci=null;
   try{
-    uci=await ensureEngine().search(fen,{skill:setting.skill,
+    const botEngine=ensureEngine();
+    if(botEngine.state==='loading'&&session.clock.enabled&&session.clock.active===session.game.turn()){
+      // Loading the 99 MB Worker is not a chess search; do not burn a move's
+      // clock on network/download and WASM initialization latency.
+      engineLoadingClockSide=session.clock.active;
+      session.clock.pause();updateClocks();
+      try{await botEngine.readyPromise;}catch{/* Search below handles the failure. */}
+      if(token!==botSequence||session.game.fen()!==fen)return;
+      if(engineLoadingClockSide&&!menuVisible()&&!session.done&&!session.clock.timeout)
+        session.clock.resume(engineLoadingClockSide);
+      engineLoadingClockSide=null;
+    }
+    uci=await botEngine.search(fen,{skill:setting.skill,
       getSearchOptions:()=>selectAiSearch(session.config,session.clock),onInfo:info=>{
       if(botSequence!==token||session.game.fen()!==fen)return;
       analysisInfo=info;analysisFen=fen;analysisLines.set(info.multiPV||1,info);renderAnalysis();

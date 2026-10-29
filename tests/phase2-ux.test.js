@@ -5,7 +5,7 @@ import {describeEvaluation} from '../src/ui/evaluation.js';
 
 const app=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const uxCss=readFileSync(new URL('../styles/ux-phase2.css',import.meta.url),'utf8');
+const uxCss=readFileSync(new URL('../styles/experience.css',import.meta.url),'utf8');
 const board=readFileSync(new URL('../src/ui/board.js',import.meta.url),'utf8');
 const sw=readFileSync(new URL('../sw.js',import.meta.url),'utf8');
 

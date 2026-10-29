@@ -573,18 +573,21 @@ function importPgn(){
 }
 function closeDrawers(){
   $('setup-panel').classList.remove('mobile-visible');$('right-panel').classList.remove('mobile-visible');$('mobile-scrim').classList.add('hidden');
+  $('focus-match').setAttribute('aria-expanded','false');$('show-records').setAttribute('aria-expanded','false');
   document.querySelectorAll('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile==='board'));
 }
 function openDrawer(which){
-  closeDrawers();if(window.innerWidth>740&&which==='settings')return;
+  closeDrawers();
   const target=which==='settings'?'setup-panel':'right-panel';
-  $(target).classList.add('mobile-visible');if(window.innerWidth<=740)$('mobile-scrim').classList.remove('hidden');
+  $(target).classList.add('mobile-visible');$('mobile-scrim').classList.remove('hidden');
+  $('focus-match').setAttribute('aria-expanded',String(which==='settings'));
+  $('show-records').setAttribute('aria-expanded',String(which==='records'));
   document.querySelectorAll('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile===which));
 }
 function openRightPanel(tab='moves'){
   document.querySelectorAll('.panel-tab').forEach(b=>{const active=b.dataset.tab===tab;b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));});
   for(const name of ['moves','analysis','openings','training'])$(`${name}-tab`).classList.toggle('hidden',tab!==name);
-  if(window.innerWidth<=1050)openDrawer('records');
+  openDrawer('records');
 }
 
 function renderStudy(){
@@ -679,7 +682,9 @@ function bindActions(){
   $('promotion-cancel').onclick=()=>{promotion=null;closeModal('promotion-modal');render();};
   $('confirm-cancel').onclick=()=>{confirmCallback=null;closeModal('confirm-modal');};
   $('confirm-yes').onclick=()=>{const callback=confirmCallback;confirmCallback=null;closeModal('confirm-modal');callback?.();};
-  $('mobile-settings').onclick=openMainMenu;$('show-records').onclick=()=>openRightPanel('moves');$('close-records').onclick=closeDrawers;$('mobile-scrim').onclick=closeDrawers;
+  $('mobile-settings').onclick=openMainMenu;
+  $('focus-match').onclick=()=>openDrawer('settings');$('focus-close-match').onclick=closeDrawers;
+  $('show-records').onclick=()=>openRightPanel('moves');$('close-records').onclick=closeDrawers;$('mobile-scrim').onclick=closeDrawers;
   document.querySelectorAll('.mobile-tab').forEach(b=>b.onclick=()=>{if(b.dataset.mobile==='board')closeDrawers();else if(b.dataset.mobile==='settings')openMainMenu();else openDrawer(b.dataset.mobile);});
   document.querySelectorAll('.modal-backdrop').forEach(el=>el.addEventListener('click',event=>{if(event.target!==el)return;if(el.id==='promotion-modal'||el.id==='main-menu-modal')return;closeModal(el.id);}));
   window.addEventListener('keydown',event=>{

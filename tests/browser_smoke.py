@@ -18,6 +18,9 @@ try:
             errors=[];page.on('pageerror',lambda exc: errors.append(str(exc)))
             page.goto('http://127.0.0.1:8977/',wait_until='domcontentloaded')
             page.wait_for_selector('.square',state='attached')
+            if width==1440:
+                menu=page.locator('#main-menu-modal').bounding_box()
+                assert abs(menu['width']-width)<2 and abs(menu['height']-height)<2,menu
             page.locator('#new-game').click()
             page.wait_for_timeout(550)
             assert page.locator('.square').count()==64, (width,'squares')
@@ -28,27 +31,26 @@ try:
             page.screenshot(path=str(ROOT/f'PREVIEW_{width}.png'))
             assert not errors,(width,errors)
             if width==1440:
-                page.locator('#show-records').click();page.locator('#tab-openings').click();assert page.locator('#opening-library .library-card').count()==33
+                page.locator('#focus-open-study').click();page.locator('#tab-openings').click();assert page.locator('#opening-library .library-card').count()==33
                 page.locator('#tab-training').click();assert page.locator('#puzzle-library .library-card').count()==16
                 page.locator('#puzzle-library .library-card').first.click()
                 assert '后與國王配合' in page.locator('#training-name').inner_text()
                 page.locator('.square[data-square="g6"]').click();page.locator('.square[data-square="h6"]').click()
                 assert '訓練完成' in page.locator('#game-status-title').inner_text()
                 page.locator('#focus-return').click()
-                page.locator('#mobile-main-menu').click();page.locator('#menu-new').click()
+                page.locator('#main-menu-open').click()
                 page.locator('[data-mode="local"]').click()
                 page.locator('#new-game').click()
                 page.locator('.square[data-square="e2"]').click();page.locator('.square[data-square="e4"]').click()
                 assert page.locator('#moves-count').inner_text()=='1 PLIES'
-                page.locator('#show-records').click();page.locator('#tab-moves').click()
-                page.locator('#focus-study-editor summary').click()
+                page.locator('#focus-open-study').click();page.locator('#tab-moves').click()
                 page.locator('#position-note').fill('Good centre')
                 page.locator('#save-note').click()
                 page.locator('#create-variation').click()
                 page.locator('.square[data-square="e7"]').click();page.locator('.square[data-square="e5"]').click()
                 page.locator('#focus-return').click()
                 assert page.locator('.variation-item').count()==1
-                page.locator('#show-records').click();page.locator('#tab-analysis').click()
+                page.locator('#focus-open-study').click();page.locator('#tab-analysis').click()
                 assert page.locator('#multi-pv option').count()==3
                 assert not errors, errors
             page.close()

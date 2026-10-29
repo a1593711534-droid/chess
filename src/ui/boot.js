@@ -10,6 +10,9 @@ export const APP_VERSION='2.3.3';
 export const REQUIRED_IDS=[
   'download-study','mobile-annotate-btn','promotion-modal','import-modal',
   'focus-match','focus-close-match','focus-return',
+  'match-hud','board-top-slot','board-bottom-slot','focus-return-dock',
+  'top-player-strip','bottom-player-strip',
+  'focus-open-study','focus-open-analysis','focus-hint','focus-annotate','menu-start-shortcut',
   'active-match-detail','active-match-summary','ai-time-mode','ai-time-mode-section','ai-time-note','ai-think-label','ai-think-section','ai-think-select','analysis-state',
   'analysis-time','analyze-btn','arena-type','chessboard','close-records',
   'confirm-cancel','confirm-modal','confirm-text','confirm-title','confirm-yes',
@@ -18,7 +21,7 @@ export const REQUIRED_IDS=[
   'finish-variation','flip-btn','game-status-desc','game-status-title','hint-btn',
   'import-cancel','import-confirm','import-error','import-pgn','level-description',
   'level-section','level-select','main-menu-modal','main-menu-open','menu-close',
-  'menu-continue','menu-form','menu-load','menu-lock-badge','menu-new',
+  'menu-continue','menu-form','menu-load','menu-import','menu-lock-badge','menu-new',
   'menu-save','menu-saved-info','mobile-flip-btn','mobile-hint-btn','mobile-main-menu',
   'mobile-scrim','mobile-settings','mobile-undo-btn','moves-count','moves-list',
   'multi-pv','nav-end','nav-next','nav-prev','nav-start',

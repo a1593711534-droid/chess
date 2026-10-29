@@ -1,3 +1,10 @@
+## v2.3.2 · Study backup, UI state and reliability fixes
+
+- The study JSON backup contains moves, clock state, notes, annotations and every saved variation. Paste its contents into the PGN/backup import dialog to restore it; normal PGN export contains only the main line.
+- Preserved older studies with more than 50 variations and kept unsaved variations open when a save fails.
+- Improved auto-save failure reporting, safer analysis cancellation, Stockfish retry, training orientation, FEN numbering, opening identification and mobile arrow marking.
+- Added regression tests; service-worker shell version bumped to refresh offline bundles.
+
 ## v2.3.1 · Gameplay reliability, accessibility and offline support
 
 - Fixed initial white-side clock timing and protected active clocks while studying training and variations.

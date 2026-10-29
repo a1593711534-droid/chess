@@ -46,22 +46,9 @@
   .right-bottom .file-action{height:30px}
   .right-copyright{padding-top:7px}
 }
-/* Make large monitor side panels useful rather than leaving empty gutters. */
-@media(min-width:1550px) and (min-height:670px){
-  .setup-panel .panel-scroll{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:13px;row-gap:0;align-content:start}
-  .setup-panel .panel-scroll>.section-block{min-width:0}
-  .setup-panel .panel-scroll>.primary-button,
-  .setup-panel .panel-scroll>.fine-divider,
-  .setup-panel .panel-scroll>.overview,
-  .setup-panel .panel-scroll>.quick-actions{grid-column:1 / -1}
-  .setup-panel .color-choice{gap:3px;font-size:10px}
-  .setup-panel .color-choice .color-disc{width:12px;height:12px;flex-shrink:0}
-  .setup-panel .segment{font-size:10px;gap:4px}
-  .setup-panel .segment svg{width:12px;height:12px}
-  .setup-panel .select-field{padding-left:8px;font-size:11px}
-  .setup-panel .overview{margin-top:1px}
-  .setup-panel .game-status-card{min-height:82px}
-}
+/* The current setup panel has a compact, single-column active-match layout.
+   Keep it single-column at large widths instead of defining an unreachable grid
+   that the later main-menu.css !important flex rule silently overrides. */
 /* Narrow notebooks and tablets: move the study panel to an accessible drawer. */
 @media(min-width:741px) and (max-width:1150px){
   .app-header{height:52px;padding:0 13px}

@@ -12,10 +12,11 @@ import {decorateIcons} from './utils/icons.js';
 import {OPENINGS,openingFor,continuations,openingGame} from './data/openings.js';
 import {PUZZLES,CATEGORIES,readTrainingStats,recordPuzzle} from './data/puzzles.js';
 import {TrainingSession} from './study/training.js';
-import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.1';
+import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.2';
 
 const $=id=>document.getElementById(id);
 let prefs=loadPrefs();
+let autoSaveWarningShown=false,usingFallback=false,mobileAnnotating=false,flippedBeforeTraining=null,noteSaveTimer=null;
 let session=new ChessSession(prefs);
 let flipped=false;
 let thinking=false;
@@ -31,7 +32,9 @@ let board=null;
 let menuEditing=true,sessionActive=false,menuPauseSide=null;
 const menuVisible=()=>!$('main-menu-modal').classList.contains('hidden');
 function ensureEngine(){
-  if(!engine)createEngine();
+  if(!engine||engine.state==='error'){
+    engineError=null;createEngine();
+  }
   return engine;
 }
 function resumeBotIfNeeded(){
@@ -55,7 +58,8 @@ function createEngine(){
     const dot=$('engine-dot'),label=$('engine-status');
     dot.className='status-dot'+(status==='ready'?' ready':status==='error'?' error':'');
     label.textContent={loading:'正在載入 Stockfish 19',ready:'Stockfish 19 · 已就緒',thinking:'Stockfish 正在計算',error:'引擎未就緒 · 備援模式'}[status];
-    if(status==='error'){engineError=error;toast(`引擎無法啟動：${error?.message||'未知錯誤'}，改用備援對手。`,'error');}
+    if(status==='error'){engineError=error;toast(`引擎無法啟動：${error?.message||'未知錯誤'}，下次請求會嘗試重新啟動。`,'error');}
+    if(status==='ready'){engineError=null;usingFallback=false;if(board)renderPlayers();}
   });
 }
 function createGameBoard(){
@@ -109,7 +113,15 @@ function serializedForSave(){
   if(menuVisible()&&menuPauseSide&&!session.done)data.clock.active=menuPauseSide;
   return data;
 }
-function save(){if(sessionActive)saveGame(serializedForSave());}
+function save(){
+  if(!sessionActive)return;
+  const ok=saveGame(serializedForSave());
+  if(ok){autoSaveWarningShown=false;$('save-status').textContent='自動儲存正常';}
+  else{
+    $('save-status').textContent='自動儲存失敗 · 請下載備份';
+    if(!autoSaveWarningShown){autoSaveWarningShown=true;toast('瀏覽器無法自動儲存：請立即下載完整研究備份。','error');}
+  }
+}
 function updateSaveInfo(){
   const manual=loadManualGame();
   $('menu-load').disabled=!manual?.game;
@@ -134,6 +146,7 @@ function openMainMenu(){
     closeDrawers();
     if(sessionActive){prefs={...prefs,...session.config,side:prefs.side==='random'?'random':session.config.side,sound:prefs.sound};renderSettings();}
     $('main-menu-modal').classList.remove('hidden');
+    (sessionActive?$('menu-continue'):$('new-game')).focus({preventScroll:true});
   }
   setMenuEditing(!sessionActive);
   updateSaveInfo();
@@ -163,20 +176,28 @@ function loadManual(){
   const restore=()=>{
     try{cancelSearch();session=new ChessSession(manual.game.config);session.restore(manual.game,{resumeClock:false});
       sessionActive=true;menuPauseSide=manual.game.clock?.active||null;
+      $('position-note').dataset.ply='';usingFallback=false;
       prefs={...prefs,...manual.game.config,side:prefs.side==='random'?'random':manual.game.config.side};renderSettings();
       flipped=session.config.mode==='ai'&&session.config.side==='b';
-      variation=null;training=null;clockBeforeVariation=null;clockBeforeTraining=null;lastHint=null;render();save();closeMainMenu();toast('已載入手動存檔。');
+      variation=null;training=null;flippedBeforeTraining=null;clockBeforeVariation=null;clockBeforeTraining=null;lastHint=null;render();save();closeMainMenu();toast('已載入手動存檔。');
     }catch(error){toast('存檔損毀，無法讀取：'+error.message,'error');}
   };
   if(sessionActive&&!session.done)showConfirm('載入手動存檔？','目前棋局會被手動存檔取代。',restore,'載入');
   else restore();
 }
-function cancelSearch(){botSequence++;analysisSequence++;engine?.cancel();thinking=false;analysisRunning=false;const b=$('stop-analysis');if(b)b.disabled=true;}
+function cancelSearch(){
+  botSequence++;analysisSequence++;engine?.cancel();thinking=false;analysisRunning=false;
+  analysisInfo=null;analysisFen=null;analysisLines=new Map();
+  const b=$('stop-analysis');if(b)b.disabled=true;
+  if(board&&$('analysis-state'))renderAnalysis();
+}
 function initialGame(){
   prefs={...readSettings()};savePrefs(prefs);
   cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=new ChessSession(prefs);sessionActive=true;
   $('position-note').dataset.ply='';flipped=session.config.mode==='ai'&&session.config.side==='b';
-  menuPauseSide=null;lastHint=null;analysisInfo=null;analysisFen=null;render();closeDrawers();closeMainMenu();save();
+  menuPauseSide=null;lastHint=null;analysisInfo=null;analysisFen=null;
+  if(mobileAnnotating){mobileAnnotating=false;board.setAnnotationMode(false);$('mobile-annotate-btn').setAttribute('aria-pressed','false');$('mobile-annotate-btn').textContent='標記';}
+  usingFallback=false;render();closeDrawers();closeMainMenu();save();
 }
 function showNewGame(){
   if(sessionActive&&session.ply>0&&!session.done)showConfirm('開始新對局？','目前的對局將被新棋局取代。',initialGame,'開始新對局');
@@ -213,11 +234,13 @@ function startExercise(exercise){
   cancelSearch();
   if(variation){variation=null;restoreClockFromStudy(clockBeforeVariation);clockBeforeVariation=null;}
   if(!training)clockBeforeTraining=suspendClockForStudy();
+  if(!training)flippedBeforeTraining=flipped;
   training=new TrainingSession(exercise);trainingToken++;
   lastHint=null;flipped=training.game.turn()==='b';render();closeDrawers();openRightPanel('training');toast(`訓練：${exercise.title}`,'info');
 }
 function exitTraining(restore=true){
   trainingToken++;training=null;
+  if(flippedBeforeTraining!==null){flipped=flippedBeforeTraining;flippedBeforeTraining=null;}
   if(clockBeforeTraining){restoreClockFromStudy(clockBeforeTraining);clockBeforeTraining=null;}
   if(restore){lastHint=null;render();save();resumeBotIfNeeded();}
 }
@@ -250,7 +273,7 @@ function beginVariation(){
 }
 function finishVariation(){
   if(!variation)return;
-  if(variation.moves.length){try{session.study.addBranch(variation.origin,variation.fen,variation.moves);toast('已儲存變例，可在棋譜頁面再次開啟。');save();}catch(e){toast(`變例儲存失敗：${e.message}`,'error');}}
+  if(variation.moves.length){try{session.study.addBranch(variation.origin,variation.fen,variation.moves);toast('已儲存變例，可在棋譜頁面再次開啟。');save();}catch(e){toast(`變例尚未儲存：${e.message}。目前變例仍在，可先複製 PGN。`,'error');return;}}
   variation=null;restoreClockFromStudy(clockBeforeVariation);clockBeforeVariation=null;
   render();save();resumeBotIfNeeded();
 }
@@ -301,7 +324,8 @@ async function runBot(){
     }});
   }catch(error){engineError=error;}
   if(token!==botSequence||session.game.fen()!==fen)return;
-  if(!uci)uci=fallbackMove(fen,session.config.level);
+  if(!uci){usingFallback=true;uci=fallbackMove(fen,session.config.level);}
+  else usingFallback=false;
   thinking=false;
   if(uci&&session.game.moves({verbose:true}).some(m=>moveToUci(m)===uci)){
     makeMove({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||undefined},true);
@@ -332,7 +356,7 @@ function statusDisplay(){
   if(variation)return {title:'變例沙盒 · STUDY BOARD',desc:'你可以自由走出另一條合法路線，結束時儲存為獨立分支。'};
   const result=session.status();
   if(result)return {title:gameOutcomeText(result),desc:'本局已結束。你可以重新開始或下載棋譜。'};
-  if(!session.atLatest)return {title:'正在回看棋譜',desc:'返回最新局面，即可繼續對弈。'};
+  if(!session.atLatest)return {title:'正在回看棋譜',desc:'正式棋鐘仍在倒數；回到最新局面繼續，或開啟主選單暫停。'};
   if(thinking)return {title:'引擎正在思考',desc:'電腦正在計算最佳的下一步…'};
   if(session.game.isCheck())return {title:`${session.game.turn()==='w'?'白方':'黑方'}被將軍`,desc:'國王受到攻擊，必須先解除將軍。'};
   return {title:`輪到${session.game.turn()==='w'?'白方':'黑方'}走棋`,desc:session.ply===0?'選取棋子開始你的第一步。':'仔細觀察局面，尋找下一步。'};
@@ -340,6 +364,7 @@ function statusDisplay(){
 function render(){
   const current=activeGame();
   const isPlayable=training?(!training.solved&&!training.pendingReply):variation?true:session.atLatest&&!session.done&&!thinking&&session.isHumanTurn();
+  if((training||variation)&&mobileAnnotating){mobileAnnotating=false;board.setAnnotationMode(false);$('mobile-annotate-btn').setAttribute('aria-pressed','false');$('mobile-annotate-btn').textContent='標記';}
   board.update(current,{flipped,disabled:!isPlayable,lastHint,annotations:training||variation?[]:(session.study.marks[String(session.cursor)]||[])});
   $('active-match-summary').textContent=session.config.mode==='ai'?`人機對弈 · ${resolveLevel(session.config.level).label}`:'雙人本機對弈';
   $('active-match-detail').textContent=session.config.mode==='ai'?`${describeAiTime(session.config,session.clock)} · 雙方棋鐘 ${session.config.time==='none'?'不限時':session.config.time} · ${session.config.side==='w'?'執白':'執黑'}`:`雙方棋鐘 ${session.config.time==='none'?'不限時':session.config.time}`;
@@ -360,7 +385,7 @@ function renderPlayers(){
   for(const [position,color] of [['top',topSide],['bottom',bottomSide]]){
     if(training||variation){const isBottom=position==='bottom';$(`${position}-name`).textContent=training?(isBottom?'你 · 解題棋手':'教學應答棋手'):(isBottom?'變例棋手':'變例棋手');$(`${position}-detail`).textContent=training?(isBottom?'TRAINING · ACTIVE':'SCRIPTED REPLIES'):'FREE STUDY · LOCAL';$(`${position}-avatar`).textContent=color==='w'?'♔':'♚';$(`${position}-avatar`).className=`player-avatar ${color==='w'?'light-avatar':'dark-avatar'}`;$(`${position}-captured`).innerHTML='';continue;}
     const isHuman=session.config.mode==='local'||color===session.config.side;
-    const name=session.config.mode==='local'?(color==='w'?'白方棋手':'黑方棋手'):(isHuman?`你 · ${color==='w'?'白方':'黑方'}`:'Stockfish 19');
+    const name=session.config.mode==='local'?(color==='w'?'白方棋手':'黑方棋手'):(isHuman?`你 · ${color==='w'?'白方':'黑方'}`:(usingFallback?'備援 AI · 輕量棋力':'Stockfish 19'));
     const detail=session.config.mode==='local'?'本機對弈 · HUMAN':(isHuman?'人類棋手 · HUMAN':`棋力等級 · ${resolveLevel(session.config.level).label.toUpperCase()}`);
     $(`${position}-name`).textContent=name;$(`${position}-detail`).textContent=detail;
     $(`${position}-avatar`).textContent=color==='w'?'♔':'♚';
@@ -374,7 +399,7 @@ function updateClocks(){
   for(const [pos,side] of [['top',sideTop],['bottom',sideBottom]]){
     const element=$(`${pos}-clock`);element.textContent=training?'TRAIN':variation?'STUDY':session.clock.format(side);
     element.className='clock-display';
-    if(!training&&!variation&&!session.done&&session.atLatest&&session.game.turn()===side)element.classList.add('active-clock');
+    if(!training&&!variation&&!session.done&&session.clock.active===side)element.classList.add('active-clock');
     if(session.clock.enabled&&session.clock.remaining[side]<30000)element.classList.add('low-time');
   }
 }
@@ -386,14 +411,19 @@ function renderMoves(){
   const previous=list.querySelector('.move-token.current')?.dataset.ply;
   if(!moves.length){list.innerHTML='<div class="empty-state"><span class="empty-mark">♞</span><strong>棋局尚未開始</strong><small>每一步精彩著法，將在此完整記錄。</small></div>';return;}
   list.innerHTML='';const fragment=document.createDocumentFragment();
-  for(let i=0;i<moves.length;i+=2){
+  const fenParts=session.initialFen.split(' ');
+  const firstPly=(Math.max(1,Number(fenParts[5])||1)-1)*2+(fenParts[1]==='b'?1:0);
+  for(let i=0;i<moves.length;){
+    const blackFirst=(firstPly+i)%2===1;
     const row=document.createElement('div');row.className='move-row';
-    const num=document.createElement('span');num.className='move-number';num.textContent=`${i/2+1}.`;row.append(num);
-    for(const j of [i,i+1]){
+    const num=document.createElement('span');num.className='move-number';num.textContent=`${Math.floor((firstPly+i)/2)+1}${blackFirst?'...':'.'}`;row.append(num);
+    if(blackFirst){const spacer=document.createElement('span');spacer.setAttribute('aria-hidden','true');row.append(spacer);}
+    for(const j of (blackFirst?[i]:[i,i+1])){
       if(j>=moves.length)break;
       const button=document.createElement('button');button.type='button';button.className='move-token'+(session.cursor===j+1?' current':'');button.dataset.ply=String(j+1);button.textContent=moves[j].san;button.title=`查看第 ${j+1} 步`;
       button.onclick=()=>goToPly(j+1);row.append(button);
     }fragment.append(row);
+    i+=blackFirst?1:2;
   }
   list.append(fragment);
   if(String(session.cursor)!==previous)list.querySelector('.move-token.current')?.scrollIntoView({block:'nearest'});
@@ -431,7 +461,7 @@ async function analyze(hint=false){
   analysisLines=new Map();analysisInfo=null;analysisFen=fen;
   analysisRunning=true;$('stop-analysis').disabled=false;
   lastHint=null;
-  $('analysis-state').textContent='分析中…';
+  renderAnalysis();
   if(!hint)openRightPanel('analysis');
   let best=null,latest=null;
   try{
@@ -441,9 +471,9 @@ async function analyze(hint=false){
       latest=analysisLines.get(1)||info;analysisInfo=latest;analysisFen=fen;renderAnalysis();
     }});
   }catch(error){engineError=error;}
-  if(token!==analysisSequence)return;
+  if(token!==analysisSequence||activeGame().fen()!==fen)return;
   analysisRunning=false;$('stop-analysis').disabled=true;
-  if(!best){if(engineError){best=fallbackMove(fen,'master');toast('Stockfish 不可用，已使用備援建議。','info');}else{toast('未能完成分析。','error');return;}}
+  if(!best){if(engineError){best=fallbackMove(fen,'master');toast('Stockfish 不可用，已使用備援建議。','info');}else{renderAnalysis();toast('未能完成分析。','error');return;}}
   if(!latest){analysisInfo={cp:null,mate:null,depth:0,multiPV:1,pv:[best]};analysisLines.set(1,analysisInfo);analysisFen=fen;}
   if(hint&&best){lastHint={from:best.slice(0,2),to:best.slice(2,4)};
     toast(`提示：${best.slice(0,2)} → ${best.slice(2,4)}。綠色格為建議著法。`,'info');
@@ -454,7 +484,7 @@ function goToPly(ply){
   if(training||variation)return;
   const wasLatest=session.atLatest;
   const next=Math.max(0,Math.min(session.ply,ply));
-  if(next!==session.ply&&thinking)cancelSearch();
+  if(next!==session.cursor&&(thinking||analysisRunning))cancelSearch();
   session.goTo(next);lastHint=null;render();
   if(!wasLatest&&session.atLatest)resumeBotIfNeeded();
 }
@@ -463,6 +493,13 @@ function navigate(move){
   goToPly(next);
 }
 function flipBoard(){flipped=!flipped;render();}
+function toggleMobileAnnotation(){
+  if(training||variation){toast('請先返回正式對局，再使用棋盤標記。','info');return;}
+  mobileAnnotating=!mobileAnnotating;
+  board.setAnnotationMode(mobileAnnotating);
+  $('mobile-annotate-btn').setAttribute('aria-pressed',String(mobileAnnotating));
+  $('mobile-annotate-btn').textContent=mobileAnnotating?'完成標記':'標記';
+}
 function doResign(){
   if(training||variation||session.done||session.ply===0)return;
   showConfirm('確定認輸？','認輸後將結束本局，但棋譜仍可匯出保存。',()=>{
@@ -470,12 +507,29 @@ function doResign(){
     session.result={winner:loser==='w'?'b':'w',kind:'resign'};session.clock.pause();render();save();playSound('end',prefs.sound);toast(gameOutcomeText(session.result));
   },'確認認輸');
 }
-function openModal(id){$(id).classList.remove('hidden');}
-function closeModal(id){$(id).classList.add('hidden');}
+const modalFocus=new Map();
+function openModal(id){
+  modalFocus.set(id,document.activeElement);
+  const dialog=$(id);dialog.classList.remove('hidden');
+  dialog.querySelector('textarea,button:not([disabled])')?.focus({preventScroll:true});
+}
+function closeModal(id){
+  $(id).classList.add('hidden');
+  const previous=modalFocus.get(id);modalFocus.delete(id);
+  if(previous?.isConnected)previous.focus({preventScroll:true});
+}
 function showConfirm(title,text,callback,buttonLabel='確認'){$('confirm-title').textContent=title;$('confirm-text').textContent=text;$('confirm-yes').textContent=buttonLabel;confirmCallback=callback;openModal('confirm-modal');}
 async function copyText(value,name){
   try{await navigator.clipboard.writeText(value);toast(`已複製${name}。`);}
   catch{const area=document.createElement('textarea');area.value=value;area.style.position='fixed';area.style.opacity='0';document.body.append(area);area.select();const success=document.execCommand('copy');area.remove();toast(success?`已複製${name}。`:'無法複製，請使用瀏覽器的複製功能。',success?'success':'error');}
+}
+function exportStudyBackup(){
+  const data={format:'chess-atelier-study-v1',game:serializedForSave()};
+  const file=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'});
+  const url=URL.createObjectURL(file),link=document.createElement('a');
+  link.href=url;link.download=`Chess-Atelier-Study-${new Date().toISOString().slice(0,10)}.json`;link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+  toast('完整研究備份已下載（含變例、標記和註解）。','success');
 }
 function exportPgn(){
   const file=new Blob([session.pgn()+'\n'],{type:'application/x-chess-pgn;charset=utf-8'}),url=URL.createObjectURL(file);
@@ -485,10 +539,20 @@ function exportPgn(){
 function importPgn(){
   try{
     const text=$('pgn-input').value.trim();if(!text)throw new Error('請先貼上 PGN 棋譜。');
-    const next=new ChessSession({...prefs,mode:'local',time:'none'});next.importPgn(text);
-    cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=next;$('position-note').dataset.ply='';flipped=false;lastHint=null;analysisInfo=null;analysisFen=null;
-    prefs={...prefs,mode:'local',time:'none'};savePrefs(prefs);renderSettings();closeModal('import-modal');
-    sessionActive=true;render();save();toast(`已載入 ${session.ply} 步棋譜。`);closeDrawers();
+    const isBackup=text.startsWith('{')&&text.includes('"chess-atelier-study-v1"');
+    let next;
+    if(isBackup){
+      const data=JSON.parse(text);
+      if(data.format!=='chess-atelier-study-v1'||!data.game||typeof data.game.config!=='object')throw Error('研究備份格式無效');
+      next=new ChessSession(data.game.config);next.restore(data.game,{resumeClock:true});
+    }else{next=new ChessSession({...prefs,mode:'local',time:'none'});next.importPgn(text);}
+    cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=next;
+    $('position-note').dataset.ply='';flipped=isBackup&&session.config.mode==='ai'&&session.config.side==='b';
+    menuPauseSide=null;usingFallback=false;lastHint=null;analysisInfo=null;analysisFen=null;
+    if(mobileAnnotating){mobileAnnotating=false;board.setAnnotationMode(false);$('mobile-annotate-btn').setAttribute('aria-pressed','false');$('mobile-annotate-btn').textContent='標記';}
+    prefs={...prefs,...next.config,side:isBackup?next.config.side:prefs.side,mode:next.config.mode,time:next.config.time};
+    savePrefs(prefs);renderSettings();closeModal('import-modal');
+    sessionActive=true;render();save();toast(`已載入 ${session.ply} 步${isBackup?'研究備份':'棋譜'}。`);closeDrawers();
   }catch(e){$('import-error').textContent=`匯入失敗：${e.message||'PGN 格式不正確'}`;}
 }
 function closeDrawers(){
@@ -527,9 +591,9 @@ function renderStudy(){
 }
 function renderOpenings(){
   const history=session.current.history();const found=openingFor(history);
-  $('opening-detected').textContent=found?`${found.eco} · ${found.name}`:history.length?'目前路線不在精選庫中':'標準起始局面 · 33 條精選路線';
-  const cand=$('opening-candidates');cand.innerHTML='';
   const next=continuations(history);
+  $('opening-detected').textContent=found?`${found.eco} · ${found.name}`:history.length?(next.length?'尚未確定開局 · 繼續走棋以辨識':'目前路線不在精選庫中'):'標準起始局面 · 33 條精選路線';
+  const cand=$('opening-candidates');cand.innerHTML='';
   for(const option of next.slice(0,8)){
     const item=document.createElement('div');item.className='candidate-item';
     const label=document.createElement('strong');label.textContent=option.san;
@@ -572,20 +636,28 @@ function bindActions(){
   $('menu-save').onclick=saveManual;$('save-game').onclick=saveManual;$('menu-load').onclick=loadManual;
   $('new-game').onclick=showNewGame;$('undo-btn').onclick=doUndo;$('flip-btn').onclick=flipBoard;
   $('mobile-undo-btn').onclick=doUndo;$('mobile-flip-btn').onclick=flipBoard;$('mobile-hint-btn').onclick=()=>analyze(true);
+  $('mobile-annotate-btn').onclick=toggleMobileAnnotation;
   $('sound-btn').onclick=()=>{prefs.sound=!prefs.sound;savePrefs(prefs);renderSettings();toast(prefs.sound?'音效已開啟':'音效已關閉','info');};
   $('resign-btn').onclick=doResign;
   $('nav-start').onclick=()=>navigate('first');$('nav-prev').onclick=()=>navigate('prev');$('nav-next').onclick=()=>navigate('next');$('nav-end').onclick=()=>navigate('last');
   document.querySelectorAll('.panel-tab').forEach(b=>b.onclick=()=>openRightPanel(b.dataset.tab));
   $('analyze-btn').onclick=()=>analyze(false);$('hint-btn').onclick=()=>analyze(true);
   $('stop-analysis').onclick=()=>{cancelSearch();toast('已停止計算。','info');};
-  $('save-note').onclick=()=>{session.study.setNote(session.cursor,$('position-note').value);save();toast('棋譜註解已儲存，也會寫入匯出的 PGN。');};
+  $('position-note').addEventListener('input',()=>{
+    const ply=Number($('position-note').dataset.ply);
+    if(!Number.isInteger(ply))return;
+    session.study.setNote(ply,$('position-note').value);
+    clearTimeout(noteSaveTimer);noteSaveTimer=setTimeout(()=>save(),350);
+  });
+  $('save-note').onclick=()=>{clearTimeout(noteSaveTimer);session.study.setNote(session.cursor,$('position-note').value);save();toast('棋譜註解已儲存，也會寫入匯出的 PGN。');};
   $('create-variation').onclick=beginVariation;$('finish-variation').onclick=finishVariation;
   $('export-variation').onclick=()=>{if(variation)copyText(session.study.branchPgn(variation),'變例 PGN');};
   $('opening-filter').onchange=e=>{openingFilter=e.target.value;renderOpenings();};
   $('puzzle-filter').onchange=e=>{puzzleFilter=e.target.value;renderTraining();};
   $('training-reset').onclick=()=>{if(training){trainingToken++;training.restart();render();}};
   $('training-exit').onclick=()=>exitTraining();
-  $('copy-fen').onclick=()=>copyText(activeGame().fen(),'FEN 局面');$('copy-pgn').onclick=()=>copyText(session.pgn(),'PGN 棋譜');$('export-btn').onclick=exportPgn;
+  $('copy-fen').onclick=()=>copyText(activeGame().fen(),'FEN 局面');$('copy-pgn').onclick=()=>copyText(session.pgn(),'主線 PGN 棋譜');$('export-btn').onclick=exportPgn;
+  $('download-study').onclick=exportStudyBackup;
   $('import-pgn').onclick=()=>{$('pgn-input').value='';$('import-error').textContent='';openModal('import-modal');};
   $('import-confirm').onclick=importPgn;$('import-cancel').onclick=()=>closeModal('import-modal');
   $('promotion-cancel').onclick=()=>{promotion=null;closeModal('promotion-modal');render();};
@@ -595,8 +667,23 @@ function bindActions(){
   document.querySelectorAll('.mobile-tab').forEach(b=>b.onclick=()=>{if(b.dataset.mobile==='board')closeDrawers();else if(b.dataset.mobile==='settings')openMainMenu();else openDrawer(b.dataset.mobile);});
   document.querySelectorAll('.modal-backdrop').forEach(el=>el.addEventListener('click',event=>{if(event.target!==el)return;if(el.id==='promotion-modal'||el.id==='main-menu-modal')return;closeModal(el.id);}));
   window.addEventListener('keydown',event=>{
-    if(event.key==='Escape'){if(!$('confirm-modal').classList.contains('hidden')){closeModal('confirm-modal');return;}if(menuVisible()){closeMainMenu();return;}closeDrawers();for(const id of ['import-modal','confirm-modal'])closeModal(id);return;}
-    if(document.querySelector('.modal-backdrop:not(.hidden)')||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+    const modal=[...document.querySelectorAll('.modal-backdrop:not(.hidden)')].at(-1);
+    if(event.key==='Tab'&&modal){
+      const focusable=[...modal.querySelectorAll('button:not([disabled]),textarea,select')].filter(el=>el.getClientRects().length&&el.tabIndex>=0);
+      if(focusable.length){const first=focusable[0],last=focusable.at(-1);
+        if(event.shiftKey&&(document.activeElement===first||!modal.contains(document.activeElement))){event.preventDefault();last.focus();}
+        else if(!event.shiftKey&&(document.activeElement===last||!modal.contains(document.activeElement))){event.preventDefault();first.focus();}
+      }
+      return;
+    }
+    if(event.key==='Escape'){
+      if(!$('promotion-modal').classList.contains('hidden')){$('promotion-cancel').click();return;}
+      if(!$('confirm-modal').classList.contains('hidden')){confirmCallback=null;closeModal('confirm-modal');return;}
+      if(!$('import-modal').classList.contains('hidden')){closeModal('import-modal');return;}
+      if(menuVisible()){closeMainMenu();return;}
+      closeDrawers();return;
+    }
+    if(modal||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
     if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){event.preventDefault();doUndo();}
     else if(event.key.toLowerCase()==='f'&&!event.ctrlKey&&!event.metaKey){flipBoard();}
   });
@@ -620,19 +707,21 @@ function init(){
   }
 }
 function startApplication(){
-  const saved=loadSavedGame();if(saved){try{session.restore(saved,{resumeClock:false});sessionActive=true;
+  const saved=loadSavedGame();let invalidSave=false;
+  if(saved){try{session.restore(saved,{resumeClock:false});sessionActive=true;
     menuPauseSide=saved.clock?.active||null;
     prefs={...prefs,...saved.config,side:prefs.side==='random'?'random':saved.config.side};flipped=session.config.mode==='ai'&&session.config.side==='b';
-  }catch{/* corrupted saves are ignored */}}
+  }catch{invalidSave=true;}}
   // Random is a selection preference, not the resolved side stored in an old game.
   if(!['w','b','random'].includes(prefs.side))prefs.side='w';
   renderSettings();bindActions();
+  if(invalidSave)toast('自動存檔損毀，已保留原始資料。請使用手動存檔或備份恢復。','error');
   for(const category of CATEGORIES.slice(1)){$('puzzle-filter').add(new Option(category,category));}
   render();
   $('main-menu-modal').classList.remove('hidden');
   setMenuEditing(!sessionActive);
   updateSaveInfo();
-  window.addEventListener('pagehide',()=>save());
+  window.addEventListener('pagehide',()=>{clearTimeout(noteSaveTimer);save();});
   setInterval(()=>{
     if(menuVisible()||!sessionActive)return;
     const timedOut=session.clock.tick();

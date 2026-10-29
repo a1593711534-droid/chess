@@ -37,6 +37,15 @@ const rows=[
 ];
 export const OPENINGS=rows.map(([eco,name,line])=>({eco,name,moves:line.split(' ')}));
 export function validateOpenings(){for(const row of OPENINGS){const g=new Chess();for(const san of row.moves){try{g.move(san,{strict:true});}catch(e){throw Error(`${row.eco} ${row.name}: ${san}: ${e.message}`);}}}return true;}
-export function openingFor(history){const h=history.map(x=>typeof x==='string'?x:x.san);const matched=OPENINGS.filter(r=>r.moves.slice(0,Math.min(h.length,r.moves.length)).every((m,i)=>h[i]===m));if(!h.length)return null;return matched.sort((a,b)=>Math.min(b.moves.length,h.length)-Math.min(a.moves.length,h.length))[0]||null;}
+export function openingFor(history){
+  const h=history.map(x=>typeof x==='string'?x:x.san);
+  if(!h.length)return null;
+  const compatible=OPENINGS.filter(r=>r.moves.slice(0,Math.min(h.length,r.moves.length)).every((m,i)=>h[i]===m));
+  // A partial prefix like 1.e4 may match many ECO codes. Do not guess a name.
+  const codes=new Set(compatible.map(r=>r.eco));
+  if(codes.size===1)return compatible[0];
+  const completed=compatible.filter(r=>r.moves.length<=h.length);
+  return completed.sort((a,b)=>b.moves.length-a.moves.length)[0]||null;
+}
 export function continuations(history){const h=history.map(x=>typeof x==='string'?x:x.san);const choices=new Map();for(const o of OPENINGS){if(o.moves.length<=h.length||!h.every((m,i)=>o.moves[i]===m))continue;const next=o.moves[h.length];if(!choices.has(next))choices.set(next,{san:next,lines:[]});choices.get(next).lines.push(o);}return [...choices.values()].sort((a,b)=>b.lines.length-a.lines.length||a.san.localeCompare(b.san));}
 export function openingGame(row){if(!OPENINGS.includes(row))throw Error('Unknown opening');const g=new Chess();for(const san of row.moves)g.move(san);return g;}

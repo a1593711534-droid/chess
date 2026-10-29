@@ -1,3 +1,10 @@
+## v2.3.2 — Audit bug fixes and complete study backups
+
+- Safeguarded study variations and browser auto-save, with JSON backup roundtrips.
+- Fixed analysis cancellation and stale hints, engine restart, training orientation, and FEN move numbering.
+- Improved accessible modals, note preservation, opening labels and mobile marking.
+- Rotated the offline cache version to refresh the application consistently.
+
 ## v2.3.1 — Stability, gameplay and offline improvements
 
 - Fixed first-turn chess clock timing, variation clock pausing and AI search restarts.

@@ -56,7 +56,7 @@ test('navigation and study mode return paths re-queue an interrupted bot search'
   assert.match(app,/function resumeBotIfNeeded\(\)/);
   assert.match(app,/if\(!wasLatest&&session\.atLatest\)resumeBotIfNeeded\(\)/);
   assert.match(app,/render\(\);save\(\);resumeBotIfNeeded\(\)/);
-  assert.match(app,/if\(next!==session\.ply&&thinking\)cancelSearch\(\)/);
+  assert.match(app,/if\(next!==session\.cursor&&\(thinking\|\|analysisRunning\)\)cancelSearch\(\)/);
   assert.match(app,/if\(!sessionActive\|\|menuVisible\(\)\|\|training\|\|variation\|\|thinking/);
 });
 

@@ -5,7 +5,7 @@ export class StudyBook{
     if(!raw||typeof raw!=='object')return;
     this.notes=Object.fromEntries(Object.entries(raw.notes||{}).filter(([k,v])=>/^\d{1,4}$/.test(k)&&typeof v==='string').map(([k,v])=>[k,v.slice(0,500)]));
     this.marks=Object.fromEntries(Object.entries(raw.marks||{}).filter(([k,a])=>/^\d{1,4}$/.test(k)&&Array.isArray(a)).map(([k,a])=>[k,a.filter(m=>/^[a-h][1-8]$/.test(m?.from)&&/^[a-h][1-8]$/.test(m?.to)).slice(0,24)]));
-    this.branches=[];for(const item of (Array.isArray(raw.branches)?raw.branches:[]).slice(0,50)){
+    this.branches=[];for(const item of (Array.isArray(raw.branches)?raw.branches:[])){
       try{this.addBranch(item.origin,item.fen,item.moves);}catch{/* ignore damaged saved variation */}
     }
   }

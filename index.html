@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-Hant" data-app-version="2.0.2">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#11181d" />
+  <meta name="description" content="棋境 Chess Atelier · 完全離線的專業西洋棋對弈空間，搭載 Stockfish 19。" />
+  <title>CHESS ATELIER PRO — 離線旗艦棋藝工作站</title>
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./styles/base.css" />
+  <link rel="stylesheet" href="./styles/layout.css" />
+  <link rel="stylesheet" href="./styles/board.css" />
+  <link rel="stylesheet" href="./styles/mobile.css" />
+  <link rel="stylesheet" href="./styles/pro.css" />
+</head>
+<body>
+  <div class="app-shell" id="app">
+    <header class="app-header">
+      <div class="brand" aria-label="Chess Atelier 棋境">
+        <span class="brand-mark" aria-hidden="true">♞</span>
+        <div class="brand-type"><strong>CHESS <span>ATELIER</span><sup class="pro-sup">PRO</sup></strong><small>PRO · 離線棋藝工作站</small></div>
+      </div>
+      <div class="header-motto"><span class="gold-line"></span> STUDY DEEPER · PLAY STRONGER <span class="gold-line"></span></div>
+      <div class="header-right">
+        <div class="engine-status"><span class="status-dot" id="engine-dot"></span><span id="engine-status">準備載入引擎</span></div>
+        <button class="icon-button mobile-header-control" id="mobile-settings" aria-label="開啟設定" title="設定"><span data-icon="settings"></span></button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="side-panel setup-panel" id="setup-panel" aria-label="對局設定">
+        <div class="panel-heading"><div><div class="eyebrow">MATCH SETUP</div><h2>開始對弈</h2></div><span class="heading-icon">✦</span></div>
+        <div class="panel-scroll">
+          <section class="section-block">
+            <div class="field-label">對弈模式</div>
+            <div class="segmented" id="mode-select" role="group" aria-label="對弈模式">
+              <button class="segment active" data-mode="ai"><span data-icon="cpu"></span>人機對戰</button>
+              <button class="segment" data-mode="local"><span data-icon="users"></span>雙人對弈</button>
+            </div>
+          </section>
+          <section class="section-block" id="side-section">
+            <div class="field-label">執棋顏色</div>
+            <div class="color-select" id="color-select" role="group" aria-label="執棋顏色">
+              <button class="color-choice selected" data-side="w"><span class="color-disc white-disc"></span>白方</button>
+              <button class="color-choice" data-side="b"><span class="color-disc black-disc"></span>黑方</button>
+              <button class="color-choice" data-side="random"><span data-icon="shuffle"></span>隨機</button>
+            </div>
+          </section>
+          <section class="section-block" id="level-section">
+            <div class="field-label">電腦強度 <span class="field-sub" id="level-description">適合初學者</span></div>
+            <select id="level-select" class="select-field" aria-label="電腦強度">
+              <option value="beginner">01 · 入門 Beginner</option>
+              <option value="casual">02 · 休閒 Casual</option>
+              <option value="club" selected>03 · 俱樂部 Club</option>
+              <option value="expert">04 · 高手 Expert</option>
+              <option value="master">05 · 大師 Master</option>
+            </select>
+          </section>
+          <section class="section-block">
+            <div class="field-label">思考時間 <span class="field-sub">每步加秒</span></div>
+            <select id="time-select" class="select-field" aria-label="棋鐘設定">
+              <option value="none">不限時 · Casual</option>
+              <option value="3+0">3 分鐘 · 快棋</option>
+              <option value="5+3">5 分鐘 + 3 秒</option>
+              <option value="10+5" selected>10 分鐘 + 5 秒</option>
+              <option value="15+10">15 分鐘 + 10 秒</option>
+              <option value="30+0">30 分鐘 · 慢棋</option>
+            </select>
+          </section>
+          <button class="primary-button" id="new-game"><span data-icon="plus"></span>開始新對局<span class="primary-arrow">↗</span></button>
+          <div class="fine-divider"></div>
+          <section class="overview">
+            <div class="section-kicker">GAME OVERVIEW <span class="tiny-diamond">◇</span></div>
+            <div class="game-status-card">
+              <div class="status-overline" id="status-overline">ROUND 01 · READY</div>
+              <div class="status-title" id="game-status-title">白方先行</div>
+              <div class="status-description" id="game-status-desc">選取棋子開始你的第一步。</div>
+              <div class="status-sheen"></div>
+            </div>
+            <div class="stats-row">
+              <div><span>已走回合</span><strong id="stat-moves">00</strong></div>
+              <div><span>目前局面</span><strong id="stat-phase">開局</strong></div>
+            </div>
+          </section>
+          <div class="fine-divider"></div>
+          <section class="quick-actions">
+            <div class="section-kicker">QUICK ACTIONS</div>
+            <div class="action-grid">
+              <button class="outline-action" id="undo-btn" title="悔棋 (Ctrl+Z)"><span data-icon="undo"></span>悔棋</button>
+              <button class="outline-action" id="flip-btn" title="翻轉棋盤 (F)"><span data-icon="refresh"></span>翻轉</button>
+              <button class="outline-action" id="sound-btn" title="開關音效"><span data-icon="volume"></span><span id="sound-label">音效開啟</span></button>
+              <button class="outline-action danger-tint" id="resign-btn" title="認輸"><span data-icon="flag"></span>認輸</button>
+            </div>
+          </section>
+        </div>
+        <div class="panel-footnote"><span data-icon="shield"></span> 無帳號 · 無廣告 · 離線運行</div>
+      </aside>
+
+      <section class="arena" aria-label="西洋棋棋盤">
+        <div class="arena-header">
+          <div class="arena-heading"><span class="overline-dot"></span><span id="arena-type">STOCKFISH MATCH</span></div>
+          <div class="arena-header-right"><span class="round-caption" id="round-caption">經典對局 · STANDARD CHESS</span><button class="records-trigger" id="show-records"><span data-icon="list"></span>對局中心</button></div>
+        </div>
+        <div class="player-strip opponent-strip" id="top-player-strip">
+          <div class="player-left"><div class="player-avatar dark-avatar" id="top-avatar">♚</div><div class="player-description"><strong id="top-name">Stockfish 19</strong><small id="top-detail">引擎對手 · CLUB</small></div></div>
+          <div class="player-right"><div class="captured-pieces" id="top-captured"></div><div class="clock-display" id="top-clock">10:00</div></div>
+        </div>
+        <div class="board-stage"><div class="board-frame"><div id="chessboard" class="chessboard" role="grid" aria-label="國際象棋棋盤"></div><div class="board-corner tl"></div><div class="board-corner tr"></div><div class="board-corner bl"></div><div class="board-corner br"></div></div></div>
+        <div class="player-strip self-strip" id="bottom-player-strip">
+          <div class="player-left"><div class="player-avatar light-avatar" id="bottom-avatar">♔</div><div class="player-description"><strong id="bottom-name">你 · 白方</strong><small id="bottom-detail">準備就緒 · YOUR MOVE</small></div></div>
+          <div class="player-right"><div class="captured-pieces" id="bottom-captured"></div><div class="clock-display active-clock" id="bottom-clock">10:00</div></div>
+        </div>
+        <div class="arena-footbar"><div><span class="mini-glow"></span><span id="turn-message">準備好迎接精彩對局</span></div><span class="keyboard-tip">右鍵畫箭頭 · F 翻轉 · Ctrl+Z 悔棋</span></div>
+        <div class="arena-mobile-actions"><button id="mobile-undo-btn"><span data-icon="undo"></span>悔棋</button><button id="mobile-flip-btn"><span data-icon="refresh"></span>翻轉棋盤</button><button id="mobile-hint-btn"><span data-icon="lightbulb"></span>提示</button></div>
+      </section>
+
+      <aside class="side-panel right-panel" id="right-panel" aria-label="棋譜與分析">
+        <div class="panel-heading right-heading"><div><div class="eyebrow">GAME CENTER</div><h2>對局中心</h2></div><div class="right-heading-actions"><button class="icon-button" id="export-btn" title="下載 PGN 棋譜" aria-label="下載 PGN 棋譜"><span data-icon="download"></span></button><button class="icon-button close-records" id="close-records" aria-label="關閉對局中心" title="關閉對局中心"><span data-icon="x"></span></button></div></div>
+        <div class="panel-tabs" role="tablist" aria-label="棋譜與分析">
+          <button class="panel-tab active" id="tab-moves" role="tab" aria-selected="true" data-tab="moves">棋譜記錄</button>
+          <button class="panel-tab" id="tab-analysis" role="tab" aria-selected="false" data-tab="analysis">引擎分析</button>
+          <button class="panel-tab" id="tab-openings" role="tab" aria-selected="false" data-tab="openings">開局庫</button>
+          <button class="panel-tab" id="tab-training" role="tab" aria-selected="false" data-tab="training">戰術訓練</button>
+        </div>
+        <div class="panel-body" id="moves-tab" role="tabpanel">
+          <div class="notation-header"><span>MOVE HISTORY</span><span id="moves-count">0 PLIES</span></div>
+          <div class="moves-list" id="moves-list" aria-live="polite"><div class="empty-state"><span class="empty-mark">♞</span><strong>棋局尚未開始</strong><small>每一步精彩著法，將在此完整記錄。</small></div></div>
+          <div class="study-editor">
+            <div class="study-editor-head"><span class="section-kicker">STUDY NOTES · 棋譜註解</span><span id="note-position">初始局面</span></div>
+            <textarea id="position-note" rows="2" maxlength="500" placeholder="對目前著法加入筆記；會保存並寫入 PGN 註解…"></textarea>
+            <div class="study-actions"><button id="save-note" class="micro-button">儲存註解</button><button id="create-variation" class="micro-button">從此建立變例</button></div>
+            <div class="variation-strip hidden" id="variation-strip"><strong id="variation-title">變例探索中</strong><span id="variation-moves"></span><div class="variation-controls"><button class="micro-button" id="export-variation">複製分支 PGN</button><button class="micro-button" id="finish-variation">儲存變例並返回</button></div></div>
+            <div id="variation-list" class="variation-list"></div>
+          </div>
+          <div class="record-navigation">
+            <button class="icon-button" id="nav-start" aria-label="回到初始局面" title="回到初始局面"><span data-icon="skip-back"></span></button>
+            <button class="icon-button" id="nav-prev" aria-label="上一步" title="上一步"><span data-icon="chevron-left"></span></button>
+            <span id="position-indicator">起始位置</span>
+            <button class="icon-button" id="nav-next" aria-label="下一步" title="下一步"><span data-icon="chevron-right"></span></button>
+            <button class="icon-button" id="nav-end" aria-label="回到最新局面" title="回到最新局面"><span data-icon="skip-forward"></span></button>
+          </div>
+        </div>
+        <div class="panel-body hidden" id="analysis-tab" role="tabpanel">
+          <div class="analysis-summary"><span class="section-kicker">STOCKFISH 19 · LOCAL ENGINE</span><span class="analysis-chip" id="analysis-state">等待分析</span></div>
+          <div class="evaluation-card"><div class="eval-polarity"><span>白方優勢</span><strong id="eval-score">—</strong><span>黑方優勢</span></div><div class="eval-meter" aria-label="局面評估"><div class="eval-fill" id="eval-fill"></div></div><div class="eval-depth" id="eval-depth">啟動分析後顯示評分</div></div>
+          <div class="analysis-controls"><label for="multi-pv">比較路線</label><select id="multi-pv" class="select-field"><option value="1">1 條</option><option value="2">2 條</option><option value="3" selected>3 條 MultiPV</option></select><label for="analysis-time">計算時間</label><select id="analysis-time" class="select-field"><option value="1500">快速 1.5秒</option><option value="4000" selected>精細 4秒</option><option value="8000">深入 8秒</option></select></div>
+          <div class="section-kicker analysis-subtitle">候選著法 · ENGINE CANDIDATES</div>
+          <div id="pv-line" class="pv-lines" aria-live="polite"><div class="pv-empty">分析後顯示最佳路線、評分、搜索深度與 SAN 著法。</div></div>
+          <div class="analysis-buttons"><button class="secondary-button" id="analyze-btn"><span data-icon="search"></span>分析局面</button><button class="outline-action compact" id="hint-btn"><span data-icon="lightbulb"></span>提示</button><button class="outline-action compact" id="stop-analysis" disabled>停止</button></div>
+          <div class="analysis-note"><span data-icon="info"></span><span>分析在你的電腦上執行，不會上傳棋局。首次啟動可能需要載入約 99 MB 的離線引擎。</span></div>
+        </div>
+        <div class="panel-body hidden explorer-panel" id="openings-tab" role="tabpanel">
+          <div class="eyebrow">OPENING EXPLORER · OFFLINE</div>
+          <div class="opening-detected" id="opening-detected">尚未辨識開局</div>
+          <div class="section-kicker">目前棋局的候選續著</div>
+          <div id="opening-candidates" class="candidate-list"></div>
+          <div class="explorer-head"><span class="section-kicker">精選開局路線 · 33 LINES</span><select class="select-field" id="opening-filter" aria-label="搜尋開局類別"><option value="all">所有開局</option><option value="e4">王兵開局 e4</option><option value="d4">后兵開局 d4</option><option value="other">側翼開局</option></select></div>
+          <div id="opening-library" class="explorer-list"></div>
+          <div class="source-disclosure">離線手工編選示例，不包含實戰勝率或大型比賽統計。</div>
+        </div>
+        <div class="panel-body hidden training-panel" id="training-tab" role="tabpanel">
+          <div class="training-overview"><div><span class="eyebrow">TACTICS ACADEMY</span><strong>棋藝訓練場</strong><small>解題即時判定 · 離線進度保存</small></div><div class="training-progress"><strong id="solved-count">0 / 16</strong><span>完成題目</span></div></div>
+          <select class="select-field" id="puzzle-filter" aria-label="題目類別"><option>全部</option></select>
+          <div class="training-active hidden" id="training-active"><div class="section-kicker" id="training-label">目前題目</div><strong id="training-name">—</strong><p id="training-goal">—</p><div class="training-metrics"><span id="training-step">0 / 1</span><span id="training-errors">錯誤 0</span></div><div class="training-actions"><button class="secondary-button" id="training-reset">重新練習</button><button class="outline-action" id="training-exit">返回對局</button></div></div>
+          <div id="puzzle-library" class="explorer-list"></div>
+          <div class="source-disclosure">這是精選訓練路線；多手題的回應為預設教學著法，不代表唯一強制變例。</div>
+        </div>
+        <div class="right-bottom">
+          <div class="fine-divider"></div>
+          <div class="section-kicker">GAME FILES</div>
+          <button class="file-action" id="copy-fen"><span data-icon="copy"></span><span>複製目前局面 FEN</span><span class="file-chevron">↗</span></button>
+          <button class="file-action" id="copy-pgn"><span data-icon="clipboard"></span><span>複製完整棋譜 PGN</span><span class="file-chevron">↗</span></button>
+          <button class="file-action" id="import-pgn"><span data-icon="upload"></span><span>匯入 PGN 棋譜</span><span class="file-chevron">↗</span></button>
+          <div class="right-copyright">CHESS ATELIER PRO <span>✦</span> OFFLINE 2026</div>
+        </div>
+      </aside>
+    </main>
+    <nav class="mobile-bottom-nav" aria-label="行動裝置導覽"><button class="mobile-tab active" data-mobile="board"><span data-icon="grid"></span>棋盤</button><button class="mobile-tab" data-mobile="settings"><span data-icon="sliders"></span>對局設定</button><button class="mobile-tab" data-mobile="records"><span data-icon="list"></span>棋譜分析</button></nav>
+    <div class="mobile-scrim hidden" id="mobile-scrim"></div>
+  </div>
+  <div class="modal-backdrop hidden" id="promotion-modal" role="dialog" aria-modal="true" aria-labelledby="promotion-title"><div class="modal-card promotion-card"><div class="eyebrow">PAWN PROMOTION</div><h2 id="promotion-title">選擇升變棋子</h2><p>兵抵達底線，選擇你要升變的棋子。</p><div class="promotion-options" id="promotion-options"></div><button class="text-button" id="promotion-cancel">取消</button></div></div>
+  <div class="modal-backdrop hidden" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><div class="modal-card"><div class="eyebrow">CONFIRM ACTION</div><h2 id="confirm-title">確定要認輸？</h2><p id="confirm-text">此操作將結束目前對局。</p><div class="modal-actions"><button class="secondary-button" id="confirm-cancel">返回棋局</button><button class="primary-button" id="confirm-yes">確認</button></div></div></div>
+  <div class="modal-backdrop hidden" id="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title"><div class="modal-card import-card"><div class="eyebrow">IMPORT GAME</div><h2 id="import-title">匯入 PGN 棋譜</h2><p>貼上標準 PGN，將取代目前的對局並載入歷史著法。</p><textarea id="pgn-input" spellcheck="false" placeholder="[Event &quot;My Game&quot;]&#10;&#10;1. e4 e5 2. Nf3 Nc6 ..."></textarea><div class="import-error" id="import-error" aria-live="polite"></div><div class="modal-actions"><button class="secondary-button" id="import-cancel">取消</button><button class="primary-button" id="import-confirm">匯入棋譜</button></div></div></div>
+  <div class="toast-stack" id="toast-stack" role="status" aria-live="polite"></div>
+  <script type="module" src="./src/main.js?v=2.0.2"></script>
+</body>
+</html>

@@ -29,7 +29,7 @@ let training=null,variation=null,trainingToken=0,clockBeforeTraining=null,clockB
 let openingFilter='all',puzzleFilter='全部';
 let promotion=null,confirmCallback=null;
 let engineError=null;
-let engine=null;
+let engine=null,engineLoadingClockSide=null;
 let board=null,renderNotationView=null;
 let openingRenderKey=null,trainingRenderKey=null;
 let menuEditing=true,sessionActive=false,menuPauseSide=null,menuFocusBeforeOpen=null;
@@ -205,7 +205,7 @@ function loadManual(){
     try{
       // Validate the entire save before touching the active match.
       const next=new ChessSession(manual.game.config);next.restore(manual.game,{resumeClock:false,strictStudy:true});
-      cancelSearch();session=next;
+      cancelSearch();engine?.newGame();session=next;
       sessionActive=true;menuPauseSide=manual.game.clock?.active||null;
       $('position-note').dataset.ply='';usingFallback=false;
       prefs={...prefs,...manual.game.config,side:prefs.side==='random'?'random':manual.game.config.side};renderSettings();
@@ -217,6 +217,13 @@ function loadManual(){
   else restore();
 }
 function cancelSearch({preserveAnalysis=false}={}){
+  // If a Worker load was interrupted, restore its paused turn clock before
+  // callers snapshot the match for menus, study or undo.
+  if(engineLoadingClockSide){
+    if(sessionActive&&!session.done&&session.clock.enabled&&!session.clock.timeout&&!menuVisible())
+      session.clock.resume(engineLoadingClockSide);
+    engineLoadingClockSide=null;
+  }
   botSequence++;analysisSequence++;engine?.cancel();thinking=false;analysisRunning=false;
   if(!preserveAnalysis){analysisInfo=null;analysisFen=null;analysisLines=new Map();}
   const b=$('stop-analysis');if(b)b.disabled=true;
@@ -224,7 +231,7 @@ function cancelSearch({preserveAnalysis=false}={}){
 }
 function initialGame(){
   prefs={...readSettings()};savePrefs(prefs);
-  cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=new ChessSession(prefs);sessionActive=true;
+  cancelSearch();engine?.newGame();exitTraining(false);variation=null;clockBeforeVariation=null;session=new ChessSession(prefs);sessionActive=true;
   $('position-note').dataset.ply='';flipped=session.config.mode==='ai'&&session.config.side==='b';
   menuPauseSide=null;lastHint=null;analysisInfo=null;analysisFen=null;
   if(mobileAnnotating){mobileAnnotating=false;board.setAnnotationMode(false);$('mobile-annotate-btn').setAttribute('aria-pressed','false');$('mobile-annotate-btn').textContent='標記';}
@@ -357,12 +364,33 @@ async function runBot(){
   thinking=true;analysisLines=new Map();analysisInfo=null;analysisFen=null;render();
   let uci=null;
   try{
-    uci=await ensureEngine().search(fen,{skill:setting.skill,...budget,onInfo:info=>{
+    const botEngine=ensureEngine();
+    if(botEngine.state==='loading'&&session.clock.enabled&&session.clock.active===session.game.turn()){
+      // Loading the 99 MB Worker is not a chess search; do not burn a move's
+      // clock on network/download and WASM initialization latency.
+      engineLoadingClockSide=session.clock.active;
+      session.clock.pause();updateClocks();
+      try{await botEngine.readyPromise;}catch{/* Search below handles the failure. */}
+      if(token!==botSequence||session.game.fen()!==fen)return;
+      if(engineLoadingClockSide&&!menuVisible()&&!session.done&&!session.clock.timeout)
+        session.clock.resume(engineLoadingClockSide);
+      engineLoadingClockSide=null;
+    }
+    uci=await botEngine.search(fen,{skill:setting.skill,
+      getSearchOptions:()=>selectAiSearch(session.config,session.clock),onInfo:info=>{
       if(botSequence!==token||session.game.fen()!==fen)return;
       analysisInfo=info;analysisFen=fen;analysisLines.set(info.multiPV||1,info);renderAnalysis();
     }});
   }catch(error){engineError=error;}
   if(token!==botSequence||session.game.fen()!==fen)return;
+  // The clock can expire while the Worker is starting; never replace a timed-out
+  // Stockfish search with a fallback move after flag fall.
+  if(session.clock.snapshot().timeout){
+    thinking=false;
+    const outcome=session.status();
+    if(outcome?.kind==='timeout'&&!session.result){session.result=outcome;save();toast(gameOutcomeText(outcome),'info');}
+    render();return;
+  }
   if(!uci){usingFallback=true;uci=fallbackMove(fen,session.config.level);}
   else usingFallback=false;
   thinking=false;
@@ -578,7 +606,7 @@ function importPgn(){
       next.restore(data.game,{resumeClock:!menuVisible(),strictStudy:true});
       importedActiveSide=data.game.clock?.active||null;
     }else{next=new ChessSession({...prefs,mode:'local',time:'none'});next.importPgn(text);}
-    cancelSearch();exitTraining(false);variation=null;clockBeforeVariation=null;session=next;
+    cancelSearch();engine?.newGame();exitTraining(false);variation=null;clockBeforeVariation=null;session=next;
     $('position-note').dataset.ply='';flipped=isBackup&&session.config.mode==='ai'&&session.config.side==='b';
     menuPauseSide=isBackup&&menuVisible()?importedActiveSide:null;
     usingFallback=false;lastHint=null;analysisInfo=null;analysisFen=null;

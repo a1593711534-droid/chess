@@ -102,8 +102,24 @@ with sync_playwright() as pw:
       page.locator('#flip-btn').click()
       page.locator('#main-menu-open').click()
       page.locator('[data-mode="local"]').click();page.locator('#new-game').click()
-      page.locator('.square[data-square="e2"]').click();page.locator('.square[data-square="e4"]').click()
+      # No move, selection, or lock-state render may destroy the 64 squares
+      # or the images of pieces that have not moved.
+      page.evaluate("""() => {
+        window.__stableSquares=[...document.querySelectorAll('#chessboard .square')];
+        window.__stableKing=document.querySelector('.square[data-square="e1"] .piece-image');
+        window.__stableOverlay=document.querySelector('#chessboard svg.board-annotations');
+      }""")
+      page.locator('.square[data-square="e2"]').click()
+      assert page.evaluate("""() => window.__stableSquares.every(
+        (node,i)=>node===document.querySelectorAll('#chessboard .square')[i])"""),'selection rebuilt squares'
+      page.locator('.square[data-square="e4"]').click()
       assert page.locator('#moves-count').inner_text()=='1 PLIES'
+      assert page.evaluate("""() => window.__stableSquares.every(
+        (node,i)=>node===document.querySelectorAll('#chessboard .square')[i])"""),'move rebuilt squares'
+      assert page.evaluate("""() => window.__stableKing===document.querySelector(
+        '.square[data-square="e1"] .piece-image')"""),'unmoved piece image replaced'
+      assert page.evaluate("""() => window.__stableOverlay===document.querySelector(
+        '#chessboard svg.board-annotations')"""),'annotation overlay replaced'
       page.locator('#focus-open-study').click();page.locator('#tab-moves').click()
       page.locator('#position-note').fill('Centre control')
       page.locator('#save-note').click();page.locator('#create-variation').click()

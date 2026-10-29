@@ -3,6 +3,8 @@ export const pieceSrc=(type,color)=>`./assets/pieces/${color}${PIECES[color][typ
 const displayName={k:'國王',q:'皇后',r:'城堡',b:'主教',n:'騎士',p:'兵'};
 export function createBoard(container,onMove,onSelect,onAnnotate,onStatus){
   let selected=null,reverse=false,possible=[],hint=null,view=null,locked=false,dragging=null,marks=[],markStart=null,annotationMode=false;
+  // Keep square/image nodes mounted; full-board replacement flashes on some devices.
+  const cells=[];let annotationsKey=null;
   function announce(message){onStatus?.(message);}
   function setSelection(square){
     selected=square;possible=square&&view?view.moves({square,verbose:true}).map(m=>m.to):[];
@@ -37,14 +39,16 @@ export function createBoard(container,onMove,onSelect,onAnnotate,onStatus){
   function render(){
     if(!view)return;
     const focusedSquare=container.contains(document.activeElement)?document.activeElement.closest('[data-square]')?.dataset.square:null;
-    container.innerHTML='';
     const files=reverse?'hgfedcba':'abcdefgh',ranks=reverse?'12345678':'87654321';
     const last=view.history({verbose:true}).at(-1);
     const check=view.isCheck()?view.board().flat().find(p=>p?.type==='k'&&p.color===view.turn())?.square:null;
     const fragment=document.createDocumentFragment();
     for(let r=0;r<8;r++)for(let c=0;c<8;c++){
       const sq=`${files[c]}${ranks[r]}`,p=view.get(sq);
-      const button=document.createElement('button');button.type='button';button.dataset.square=sq;
+      const isNew=!cells[r*8+c];
+      const button=cells[r*8+c]||document.createElement('button');
+      if(isNew){cells[r*8+c]=button;button.type='button';}
+      button.dataset.square=sq;
       button.className=`square ${(r+c)%2===0?'light':'dark'}`;
       if(sq===selected)button.classList.add('selected');
       if(annotationMode&&sq===markStart)button.classList.add('annotation-start');
@@ -61,46 +65,56 @@ export function createBoard(container,onMove,onSelect,onAnnotate,onStatus){
       if(sq===check)details.push('被將軍');
       button.setAttribute('aria-label',details.join('，'));
       button.setAttribute('aria-pressed',String(sq===selected||(annotationMode&&sq===markStart)));
-      if(p){const image=document.createElement('img');image.className='piece-image';image.alt='';image.draggable=!annotationMode&&!locked&&p.color===view.turn();image.src=pieceSrc(p.type,p.color);
-        image.addEventListener('dragstart',e=>{if(annotationMode||locked||p.color!==view.turn()){e.preventDefault();return;}dragging=sq;selected=sq;possible=view.moves({square:sq,verbose:true}).map(m=>m.to);
-           onSelect?.(sq);button.classList.add('selected');
-           for(const dest of possible)container.querySelector(`[data-square="${dest}"]`)?.classList.add('possible');
-           e.dataTransfer.setData('text/plain',sq);e.dataTransfer.effectAllowed='move';});
-        image.addEventListener('dragend',()=>{const abandoned=!!dragging;dragging=null;
-           container.querySelectorAll('.drag-target').forEach(el=>el.classList.remove('drag-target'));
-           if(abandoned)setSelection(null);});button.append(image);
-      }
-      if(c===0){const rank=document.createElement('span');rank.className='coord rank';rank.textContent=ranks[r];button.append(rank);}
-      if(r===7){const file=document.createElement('span');file.className='coord file';file.textContent=files[c];button.append(file);}
-      button.addEventListener('click',()=>selectSquare(sq));
-       button.addEventListener('keydown',event=>{
-         if(event.key==='Escape'&&(selected||markStart)){
-           event.preventDefault();event.stopPropagation();
-           selected=null;possible=[];markStart=null;
-           announce('已取消棋盤選取或標記起點。');render();return;
-         }
-         const delta={ArrowLeft:[0,-1],ArrowRight:[0,1],ArrowUp:[-1,0],ArrowDown:[1,0]}[event.key];
-         if(!delta)return;
-         event.preventDefault();const nr=r+delta[0],nc=c+delta[1];
-         if(nr<0||nr>=8||nc<0||nc>=8)return;
-         const target=container.querySelector(`[data-square="${files[nc]}${ranks[nr]}"]`);
-         container.querySelectorAll('.square').forEach(el=>{el.tabIndex=-1;});
-         if(target){target.tabIndex=0;target.focus();}
-       });
-      button.addEventListener('contextmenu',e=>e.preventDefault());
-      button.addEventListener('pointerdown',e=>{if(e.button===2)markStart=sq;});
-      button.addEventListener('pointerup',e=>{if(e.button===2&&markStart){
+      // Keep the same image node when a piece has not changed.
+      let image=button.querySelector('img.piece-image');
+      if(p){
+        if(!image){image=document.createElement('img');image.className='piece-image';image.alt='';button.prepend(image);}
+        image.draggable=!annotationMode&&!locked&&p.color===view.turn();
+        const src=pieceSrc(p.type,p.color);
+        if(image.getAttribute('src')!==src)image.src=src;
+        image.ondragstart=e=>{if(annotationMode||locked||p.color!==view.turn()){e.preventDefault();return;}dragging=sq;selected=sq;possible=view.moves({square:sq,verbose:true}).map(m=>m.to);
+          onSelect?.(sq);button.classList.add('selected');
+          for(const dest of possible)container.querySelector(`[data-square="${dest}"]`)?.classList.add('possible');
+          e.dataTransfer.setData('text/plain',sq);e.dataTransfer.effectAllowed='move';};
+        image.ondragend=()=>{const abandoned=!!dragging;dragging=null;
+          container.querySelectorAll('.drag-target').forEach(el=>el.classList.remove('drag-target'));
+          if(abandoned)setSelection(null);};
+      }else image?.remove();
+      if(c===0){let rank=button.querySelector('.coord.rank');if(!rank){rank=document.createElement('span');rank.className='coord rank';button.append(rank);}if(rank.textContent!==ranks[r])rank.textContent=ranks[r];}
+      if(r===7){let file=button.querySelector('.coord.file');if(!file){file=document.createElement('span');file.className='coord file';button.append(file);}if(file.textContent!==files[c])file.textContent=files[c];}
+      // Reassign handlers instead of stacking listeners on every render.
+      button.onclick=()=>selectSquare(sq);
+      button.onkeydown=event=>{
+        if(event.key==='Escape'&&(selected||markStart)){
+          event.preventDefault();event.stopPropagation();
+          selected=null;possible=[];markStart=null;
+          announce('已取消棋盤選取或標記起點。');render();return;
+        }
+        const delta={ArrowLeft:[0,-1],ArrowRight:[0,1],ArrowUp:[-1,0],ArrowDown:[1,0]}[event.key];
+        if(!delta)return;
+        event.preventDefault();const nr=r+delta[0],nc=c+delta[1];
+        if(nr<0||nr>=8||nc<0||nc>=8)return;
+        const target=container.querySelector(`[data-square="${files[nc]}${ranks[nr]}"]`);
+        container.querySelectorAll('.square').forEach(el=>{el.tabIndex=-1;});
+        if(target){target.tabIndex=0;target.focus();}
+      };
+      button.oncontextmenu=e=>e.preventDefault();
+      button.onpointerdown=e=>{if(e.button===2)markStart=sq;};
+      button.onpointerup=e=>{if(e.button===2&&markStart){
         const from=markStart;markStart=null;onAnnotate?.(from,sq);
         announce(`已切換 ${from} 到 ${sq} 的標記。`);
-      }});
-      button.addEventListener('dragover',e=>{if(!annotationMode&&!locked&&dragging&&possible.includes(sq)){e.preventDefault();e.dataTransfer.dropEffect='move';button.classList.add('drag-target');}});
-      button.addEventListener('dragleave',()=>button.classList.remove('drag-target'));
-      button.addEventListener('drop',e=>{e.preventDefault();button.classList.remove('drag-target');if(!annotationMode&&!locked&&dragging){const from=dragging;dragging=null;if(from&&possible.includes(sq)){selected=null;possible=[];onMove(from,sq);}else setSelection(null);}});
-      fragment.append(button);
+      }};
+      button.ondragover=e=>{if(!annotationMode&&!locked&&dragging&&possible.includes(sq)){e.preventDefault();e.dataTransfer.dropEffect='move';button.classList.add('drag-target');}};
+      button.ondragleave=()=>button.classList.remove('drag-target');
+      button.ondrop=e=>{e.preventDefault();button.classList.remove('drag-target');if(!annotationMode&&!locked&&dragging){const from=dragging;dragging=null;if(from&&possible.includes(sq)){selected=null;possible=[];onMove(from,sq);}else setSelection(null);}};
+      if(isNew) fragment.append(button);
     }
-    container.append(fragment);
-    const overlay=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    if(fragment.childNodes.length)container.append(fragment);
+    const overlay=container.querySelector('svg.board-annotations')||document.createElementNS('http://www.w3.org/2000/svg','svg');
     overlay.setAttribute('viewBox','0 0 800 800');overlay.classList.add('board-annotations');overlay.setAttribute('aria-hidden','true');
+    const nextAnnotationsKey=JSON.stringify([reverse,marks]);
+    if(annotationsKey!==nextAnnotationsKey){
+      annotationsKey=nextAnnotationsKey;overlay.replaceChildren();
     const toXY=s=>{const f='abcdefgh'.indexOf(s[0]),rank=Number(s[1])-1;return {x:(reverse?7-f:f)*100+50,y:(reverse?rank:7-rank)*100+50};};
     const mk=(tag,attrs)=>{const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e;};
     const defs=mk('defs',{}),arrow=mk('marker',{id:'study-arrow',markerWidth:6,markerHeight:6,refX:5,refY:3,orient:'auto',markerUnits:'strokeWidth'});
@@ -110,7 +124,8 @@ export function createBoard(container,onMove,onSelect,onAnnotate,onStatus){
       if(mark.from===mark.to)overlay.append(mk('circle',{cx:a.x,cy:a.y,r:37,fill:'none',stroke:'#f0bd45','stroke-width':11,opacity:.92}));
       else{const vx=b.x-a.x,vy=b.y-a.y,len=Math.hypot(vx,vy),end=28;overlay.append(mk('line',{x1:a.x,y1:a.y,x2:b.x-vx/len*end,y2:b.y-vy/len*end,stroke:'#f0bd45','stroke-width':13,'stroke-linecap':'round',opacity:.83,'marker-end':'url(#study-arrow)'}));}
     }
-    container.append(overlay);
+    }
+    if(!overlay.isConnected)container.append(overlay);
     if(focusedSquare)container.querySelector(`[data-square="${focusedSquare}"]`)?.focus({preventScroll:true});
   }
   return {

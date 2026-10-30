@@ -41,6 +41,9 @@ export async function analyzeFullGame(session,engine,{
   const game=new Chess(initialFen),history=[],rows=[];
   let previous=null;
   const assess=async()=>{
+    // A terminal chess position has no legal continuation. Stockfish may send
+    // bestmove (none) without any CP score; mark it unscored, not as an error.
+    if(game.isCheckmate()||game.isStalemate()||game.isInsufficientMaterial())return null;
     let latest=null;
     const best=await engine.search(game.fen(),{
       position:{initialFen,moves:[...history]},

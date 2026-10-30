@@ -24,6 +24,11 @@ export function exportAnnotatedPgn(session){
   const comment=value=>value
     ?'{'+value.replace(/[{}]/g,c=>c==='{'?'[':']').replace(/\s+/g,' ').trim()+'}'
     :'';
+  const annotate=(notes,nags,ply,tokens)=>{
+    for(const n of nags?.[String(ply)]||[])tokens.push('$'+n);
+    const note=comment(notes?.[String(ply)]);
+    if(note)tokens.push(note);
+  };
   const moveTokens=(game,move,first)=>{
     const num=Number(game.fen().split(' ')[5]),side=game.turn();
     const before=side==='w'?num+'.':first?num+'...':null;
@@ -34,10 +39,12 @@ export function exportAnnotatedPgn(session){
     if(seen.has(b.id))throw Error('Cyclic study variation');
     const next=new Set(seen);next.add(b.id);
     const game=new Chess(b.fen),tokens=[];
+    const entry=comment(b.notes?.['0']);if(entry)tokens.push(entry);
     for(let i=0;i<=b.moves.length;i++){
       if(i<b.moves.length){
         const u=b.moves[i];
         tokens.push(...moveTokens(game,{from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]},i===0));
+        annotate(b.notes,b.nags,i+1,tokens);
       }
       for(const child of children.get(String(b.id)+':'+i)||[])
         tokens.push(renderBranch(child,next));
@@ -50,8 +57,7 @@ export function exportAnnotatedPgn(session){
   for(let i=0;i<=session.moves.length;i++){
     if(i<session.moves.length){
       tokens.push(...moveTokens(game,session.moves[i].san,i===0));
-      const note=comment(session.study.notes[String(i+1)]);
-      if(note)tokens.push(note);
+      annotate(session.study.notes,session.study.nags,i+1,tokens);
     }
     for(const b of roots.get(i)||[])tokens.push(renderBranch(b,new Set()));
   }

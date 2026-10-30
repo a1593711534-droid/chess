@@ -239,7 +239,7 @@ export class ChessSession{
       positions=[new Chess(this.initialFen).fen()];const replay=new Chess(this.initialFen);
       for(const san of saved.moves){replay.move(san);positions.push(replay.fen());}
       for(const branch of this.study.branches){
-        if(branch.origin>=positions.length||branch.fen!==positions[branch.origin]){
+        if(branch.origin>=positions.length||(branch.parentId===null&&branch.fen!==positions[branch.origin])){
           throw Error('研究備份的變例起點與主線不一致');
         }
       }
@@ -252,12 +252,13 @@ export class ChessSession{
       if(!draft||typeof draft!=='object'||Array.isArray(draft)
         ||!Number.isInteger(draft.persistedBranchIndex)||draft.persistedBranchIndex< -1
         ||draft.persistedBranchIndex>=this.study.branches.length)throw Error('Invalid variation draft');
-      const validated=this.study.validateBranch(draft.origin,draft.fen,draft.moves);
-      if(strictStudy&&(draft.origin>=positions.length||positions[draft.origin]!==draft.fen))
+      const validated=this.study.validateBranch(draft.origin,draft.fen,draft.moves,{parentId:draft.parentId,parentPly:draft.parentPly});
+      if(strictStudy&&(draft.origin>=positions.length||(validated.parentId===null&&positions[draft.origin]!==draft.fen)))
         throw Error('研究備份的變例草稿起點與主線不一致');
       if(draft.persistedBranchIndex>=0){
         const existing=this.study.branches[draft.persistedBranchIndex];
-        if(existing.origin!==draft.origin||existing.fen!==draft.fen)throw Error('Invalid variation draft branch');
+        if(existing.origin!==draft.origin||existing.fen!==draft.fen
+          ||existing.parentId!==validated.parentId||existing.parentPly!==validated.parentPly)throw Error('Invalid variation draft branch');
       }
       this.variationDraft={...validated,persistedBranchIndex:draft.persistedBranchIndex};
     }

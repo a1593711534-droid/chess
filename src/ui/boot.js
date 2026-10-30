@@ -8,7 +8,7 @@ export const APP_VERSION='2.3.7';
 // Every literal id accessed by the application at startup or during gameplay.
 // Kept explicit so tests can detect newly added UI references.
 export const REQUIRED_IDS=[
-  'board-live','arena-save-status','eval-description','mobile-analysis-btn','mobile-save-btn','claim-draw','download-study','mobile-annotate-btn','promotion-modal','import-modal',
+  'board-live','arena-save-status','eval-description','mobile-analysis-btn','mobile-save-btn','offer-draw','accept-draw','decline-draw','claim-draw','download-study','mobile-annotate-btn','promotion-modal','import-modal',
   'focus-match','focus-close-match','focus-return',
   'match-hud','board-top-slot','board-bottom-slot','focus-return-dock',
   'top-player-strip','bottom-player-strip',

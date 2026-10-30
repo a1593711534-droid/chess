@@ -57,6 +57,7 @@ jobs:
           python -m playwright install --with-deps chromium
           python tests/browser_embedded.py
           python tests/browser_offline.py
+          python tests/browser_professional.py
           python tests/engine_real_browser.py
       - name: Assemble static Pages website
         if: github.event_name != 'pull_request'

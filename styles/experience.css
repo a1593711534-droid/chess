@@ -497,3 +497,8 @@ button{touch-action:manipulation}
   .arena .board-stage{width:min(100%,var(--ux-board))!important}
   #setup-panel{min-height:520px!important}
 }
+
+/* Announced-move draw claims: legible and keyboard-operable on every viewport. */
+#confirm-modal #claim-draw-announced-label{display:block;margin:14px 0 8px;font-weight:700}
+#confirm-modal .claim-draw-select{display:block;width:100%;min-height:44px;max-width:100%;margin-bottom:16px}
+#confirm-modal .claim-draw-select:focus-visible{outline:3px solid #d4ad71;outline-offset:3px}

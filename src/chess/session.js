@@ -69,13 +69,44 @@ export class ChessSession{
   canClaimDraw(){
     return !this.status()&&this.atLatest&&(this.historyIndex.repetitions()>=3||this.game.isDrawByFiftyMoves());
   }
-  claimDraw(){
+  claimDraw(announcedMove=null){
     // A draw claim cannot retroactively overrule a clock that has just flagged.
     this.clock.tick();
-    if(!this.isHumanTurn()||!this.canClaimDraw())return false;
-    this.result={winner:null,kind:this.historyIndex.repetitions()>=3?'threefold-claim':'fifty-move-claim'};
+    if(!this.isHumanTurn())return false;
+    if(announcedMove!==null){
+      const candidate=this.claimableDrawMoves().find(m=>m.uci===announcedMove);
+      if(!candidate)return false;
+      this.result={winner:null,kind:candidate.kind,announcedMove:candidate.uci};
+    }else{
+      if(!this.canClaimDraw())return false;
+      this.result={winner:null,kind:this.historyIndex.repetitions()>=3?'threefold-claim':'fifty-move-claim'};
+    }
     this.clock.pause();
     return true;
+  }
+  /**
+   * FIDE 9.2.1 / 9.3.1: a player may write down and announce an intended move
+   * that will make the third repetition or the 50-move condition.
+   * The move is NOT played when the draw is claimed.
+   */
+  claimableDrawMoves(){
+    if(!this.atLatest||this.status()||!this.isHumanTurn())return [];
+    this.historyIndex.sync(this.game,this.initialFen);
+    if(this.drawOptionsCache?.revision===this.historyIndex.revision)return this.drawOptionsCache.moves;
+    const preview=new Chess(this.game.fen()),eligible=[];
+    for(const move of this.game.moves({verbose:true})){
+      preview.move({from:move.from,to:move.to,promotion:move.promotion});
+      // A mating move takes precedence over an otherwise valid draw claim.
+      if(!preview.isCheckmate()){
+        const count=(this.historyIndex.counts.get(GameHistoryIndex.key(preview.fen()))||0)+1;
+        const halfmoves=Number(preview.fen().split(' ')[4]);
+        const kind=count>=3?'threefold-claim':halfmoves>=100?'fifty-move-claim':null;
+        if(kind)eligible.push({uci:`${move.from}${move.to}${move.promotion||''}`,san:move.san,kind});
+      }
+      preview.undo();
+    }
+    this.drawOptionsCache={revision:this.historyIndex.revision,moves:eligible};
+    return eligible;
   }
   /** FIDE: the same position occurring five times ends the game automatically. */
   isFivefoldRepetition(){this.historyIndex.sync(this.game,this.initialFen);return this.historyIndex.repetitions()>=5;}
@@ -152,6 +183,10 @@ export class ChessSession{
       ||saved.moves.some(san=>typeof san!=='string'||san.length>32))throw Error('Invalid saved configuration or moves');
     if(strictStudy&&(!saved.study||typeof saved.study!=='object'))throw Error('研究備份缺少研究資料');
     if(saved.clockSnapshots!==undefined&&(!Array.isArray(saved.clockSnapshots)||saved.clockSnapshots.length>2000))throw Error('Invalid saved clock history');
+    // A timed study cannot be faithfully reconstructed without its clock.
+    // Untimed and legacy non-strict imports retain their existing behavior.
+    if(strictStudy&&saved.config.time!=='none'&&!validClockRecord(saved.clock))
+      throw Error('Invalid saved clock: timed study requires a complete clock');
     this.configure(saved.config);
     if(!this.config.aiThink)this.config.aiThink=String(resolveLevel(this.config.level).movetime);
     // Old saves used fixed time; do not silently reinterpret them.
@@ -164,7 +199,7 @@ export class ChessSession{
     if(this.clockSnapshots.some((entry,i)=>!validClockRecord(entry)||entry.timeout!=null
       ||(strictStudy&&entry.active!=null&&entry.active!==moveSides[i]))
       ||(strictStudy&&this.clockSnapshots.length>0&&this.clockSnapshots.length!==saved.moves.length)
-      ||(strictStudy&&this.clock.enabled&&saved.clockSnapshots!==undefined&&saved.moves.length>0&&this.clockSnapshots.length===0))
+      ||(strictStudy&&this.clock.enabled&&saved.moves.length>0&&this.clockSnapshots.length===0))
       throw Error('Invalid saved clock history');
     let positions=null;
     if(strictStudy){
@@ -206,7 +241,12 @@ export class ChessSession{
       if(!result||typeof result!=='object'||Array.isArray(result)
         ||!RESULT_KINDS.has(result.kind)||!Object.hasOwn(result,'winner')
         ||(result.winner!==null&&!['w','b'].includes(result.winner))
-        ||(result.kind==='draw'&&result.winner!==null))throw Error('Invalid saved result');
+        ||(result.kind==='draw'&&result.winner!==null)
+        ||(result.announcedMove!==undefined
+          &&(!['threefold-claim','fifty-move-claim'].includes(result.kind)
+            ||typeof result.announcedMove!=='string'
+            ||!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(result.announcedMove))))
+        throw Error('Invalid saved result');
       if(strictStudy){
         const inferred=this.status();
         const derived=new Set(['checkmate','stalemate','insufficient','fivefold','seventyfive-move','timeout','timeout-insufficient']);
@@ -218,15 +258,19 @@ export class ChessSession{
         if(result.kind==='resign'&&(this.ply===0||result.winner!==(this.config.mode==='ai'
           ?(this.config.side==='w'?'b':'w'):(this.game.turn()==='w'?'b':'w'))))
           throw Error('Invalid saved resignation');
-        if(result.kind==='threefold-claim'&&(result.winner!==null||this.historyIndex.repetitions()<3))
-          throw Error('Invalid saved draw claim');
-        if(result.kind==='fifty-move-claim'&&(result.winner!==null||!this.game.isDrawByFiftyMoves()))
-          throw Error('Invalid saved draw claim');
+        for(const kind of ['threefold-claim','fifty-move-claim']){
+          if(result.kind!==kind)continue;
+          const candidate=result.announcedMove===undefined
+            ?(kind==='threefold-claim'?this.historyIndex.repetitions()>=3:this.game.isDrawByFiftyMoves())
+            :this.claimableDrawMoves().some(m=>m.uci===result.announcedMove&&m.kind===kind);
+          if(result.winner!==null||!candidate)throw Error('Invalid saved draw claim');
+        }
         if(result.kind==='pgn'&&this.headers.Result&&this.headers.Result!=='*'
           &&this.headers.Result!==(result.winner==='w'?'1-0':result.winner==='b'?'0-1':'1/2-1/2'))
           throw Error('Invalid saved PGN result');
       }
-      this.result={winner:result.winner,kind:result.kind};
+      this.result={winner:result.winner,kind:result.kind,
+        ...(result.announcedMove===undefined?{}:{announcedMove:result.announcedMove})};
     }
     if(this.status())this.clock.pause();
   }

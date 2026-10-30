@@ -138,6 +138,8 @@ with sync_playwright() as pw:
       page.locator('#import-pgn').click()
       page.locator('#pgn-input').fill(backup)
       page.locator('#import-confirm').click()
+      assert page.locator('#confirm-modal').is_visible(), 'existing research must be confirmed before import'
+      page.locator('#confirm-yes').click()
       assert page.locator('.variation-item').count()==1
       page.locator('#focus-open-study').click();page.locator('#tab-analysis').click();assert page.locator('#multi-pv option').count()==3
       # Native drag-and-drop must reach the target square.
@@ -150,6 +152,8 @@ with sync_playwright() as pw:
       page.locator('#import-pgn').click()
       page.locator('#pgn-input').fill('[Event "Imported"]\n\n1. e4 e5 1-0')
       page.locator('#import-confirm').click()
+      assert page.locator('#confirm-modal').is_visible(), 'import must not silently overwrite the current game'
+      page.locator('#confirm-yes').click()
       assert '白方勝利' in page.locator('#game-status-title').inner_text()
       print('USER FLOW / DRAG / KEYBOARD / PGN OK',flush=True)
       assert not errs,errs
@@ -177,7 +181,8 @@ with sync_playwright() as pw:
   print('MISSING OPTIONAL CONTROL RECOVERED',flush=True)
   page.close()
   # Regression: an old HTML build must present a clear recovery screen.
-  mismatched=html.replace('data-app-version="2.3.6"','data-app-version="2.0.0"')
+  current_version=re.search(r'data-app-version="([^"]+)"',html).group(1)
+  mismatched=html.replace(f'data-app-version="{current_version}"','data-app-version="2.0.0"')
   assert mismatched!=html
   page=browser.new_page()
   errors=[];page.on('pageerror',lambda exc:errors.append(str(exc)))

@@ -448,7 +448,7 @@ function doUndo(confirmed=false){
 }
 function gameOutcomeText(outcome){
   if(!outcome)return '';
-  const why={timeout:'時間用盡', 'timeout-insufficient':'時間用盡，但對手無法將死',checkmate:'將死',resign:'認輸',stalemate:'逼和','threefold-claim':'主張三次重複和棋','fifty-move-claim':'主張50步和棋',fivefold:'五次重複局面','seventyfive-move':'75步規則',insufficient:'子力不足',draw:'和棋',pgn:'棋譜記錄結果'}[outcome.kind]||'和棋';
+  const why={agreement:'雙方同意和棋',timeout:'時間用盡', 'timeout-insufficient':'時間用盡，但對手無法將死',checkmate:'將死',resign:'認輸',stalemate:'逼和','threefold-claim':'主張三次重複和棋','fifty-move-claim':'主張50步和棋',fivefold:'五次重複局面','seventyfive-move':'75步規則',insufficient:'子力不足',draw:'和棋',pgn:'棋譜記錄結果'}[outcome.kind]||'和棋';
   if(!outcome.winner)return `和棋 · ${why}`;
   return `${outcome.winner==='w'?'白方':'黑方'}勝利 · ${why}`;
 }
@@ -463,6 +463,10 @@ function statusDisplay(){
   const result=session.status();
   if(result)return {title:gameOutcomeText(result),desc:'本局已結束。你可以重新開始或下載棋譜。'};
   if(!session.atLatest)return {title:'正在回看棋譜',desc:'正式棋鐘仍在倒數；回到最新局面繼續，或開啟主選單暫停。'};
+  if(session.pendingDrawOffer?.stage==='pending-reply')
+    return {title:'對手提出和棋',desc:'請選擇接受或拒絕；若直接落子，也視為拒絕。'};
+  if(session.pendingDrawOffer?.stage==='awaiting-move')
+    return {title:'提和已登記',desc:'請先完成本回合著法，提和才會正式交由對手決定。'};
   if(thinking)return {title:'引擎正在思考',desc:'電腦正在計算最佳的下一步…'};
   if(session.game.isCheck())return {title:`${session.game.turn()==='w'?'白方':'黑方'}被將軍`,desc:'國王受到攻擊，必須先解除將軍。'};
   return {title:`輪到${session.game.turn()==='w'?'白方':'黑方'}走棋`,desc:session.ply===0?'選取棋子開始你的第一步。':'仔細觀察局面，尋找下一步。'};
@@ -490,6 +494,12 @@ function render(){
   renderPlayers();renderMoves();renderAnalysis();renderOpenings();renderTraining();
   $('undo-btn').disabled=!training&&!variation&&session.ply===0;
   $('resign-btn').disabled=!!training||!!variation||session.done||session.ply===0;
+  const agreementEnabled=!training&&!variation&&sessionActive&&session.atLatest
+    &&session.config.mode==='local'&&!session.done;
+  $('offer-draw').disabled=!agreementEnabled||!!session.pendingDrawOffer;
+  $('accept-draw').classList.toggle('hidden',!agreementEnabled||!session.canRespondToDrawOffer());
+  $('decline-draw').classList.toggle('hidden',!agreementEnabled||!session.canRespondToDrawOffer());
+  $('offer-draw').title=session.pendingDrawOffer?'已有待處理的和棋提議':'走完本手棋後向對手正式提出和棋';
   const canClaimDraw=!training&&!variation&&sessionActive&&session.isHumanTurn()
     &&(session.canClaimDraw()||session.claimableDrawMoves().length>0);
   $('claim-draw').disabled=!canClaimDraw;
@@ -773,6 +783,18 @@ function bindActions(){
   $('focus-return').onclick=()=>{if(training)exitTraining();else if(variation)finishVariation();};
   $('sound-btn').onclick=()=>{prefs.sound=!prefs.sound;savePrefs(prefs);renderSettings();toast(prefs.sound?'音效已開啟':'音效已關閉','info');};
   $('resign-btn').onclick=doResign;
+  $('offer-draw').onclick=()=>{
+    if(!session.offerDraw()){toast('目前無法提出和棋。','info');return;}
+    save();render();toast('提和已登記：請先完成此手棋，再由對方接受或拒絕。','info');
+  };
+  $('accept-draw').onclick=()=>{
+    if(!session.respondToDrawOffer(true)){render();return;}
+    cancelSearch();render();save();playSound('end',prefs.sound);toast('雙方同意和棋。','success');
+  };
+  $('decline-draw').onclick=()=>{
+    if(!session.respondToDrawOffer(false)){render();return;}
+    render();save();toast('已拒絕提和，對局繼續。','info');
+  };
   $('claim-draw').onclick=()=>{
     if(!session.isHumanTurn())return;
     session.clock.snapshot();

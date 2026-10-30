@@ -67,7 +67,7 @@ test('nested variations have stable IDs and validate their exact parent FEN',()=
   assert.equal(reload.addBranch(1,middle.fen(),['d2d3'],{parentId:a.id,parentPly:1}).id,child.id+1);
   assert.throws(()=>book.addBranch(1,first,['d2d4'],{parentId:a.id,parentPly:1}),/parent position/);
   assert.throws(()=>new StudyBook({...data,branches:[...data.branches,{...child,id:a.id}]},{strict:true}),/duplicate/);
-  assert.throws(()=>book.upsertBranch(1,first,['c7c5'],a),/子分支/);
+  assert.throws(()=>book.upsertBranch(1,first,[],a),/子分支/);
 });
 test('PGN exports annotated mainline and actual nested RAV, preserving FEN from the root',()=>{
   const s=local();

@@ -64,6 +64,11 @@ try:
     move('e2','e4')
     page.locator('#create-variation').click()
     move('e7','e5')
+    # Export while the child is still an edit draft: it must not be omitted.
+    with page.expect_download() as draft_info:
+      page.locator('#export-btn').click()
+    draft_pgn=Path(draft_info.value.path()).read_text(encoding='utf-8')
+    assert '(1. e4 (1... e5))' in draft_pgn,draft_pgn
     page.locator('#finish-variation').click()
     assert page.locator('.variation-item').count()==2
     with page.expect_download() as download_info:

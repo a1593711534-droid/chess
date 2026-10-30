@@ -1,5 +1,5 @@
 /* Offline support for the static, same-origin Chess Atelier GitHub Pages app. */
-const SHELL_CACHE='chess-atelier-shell-2.3.7-professional-integrity';
+const SHELL_CACHE='chess-atelier-shell-2.3.8-nested-study';
 const ENGINE_CACHE='chess-atelier-stockfish-19.0.1';
 const PREFIX='chess-atelier-';
 const SHELL_FILES=[

@@ -3,6 +3,7 @@ import {ChessClock} from './clock.js';
 import {GameHistoryIndex} from './history-index.js';
 import {StudyBook} from '../study/studybook.js';
 import {exportAnnotatedPgn} from '../study/pgn-variation.js';
+import {parseAnnotatedPgn} from '../study/pgn-import.js';
 import {normalizeAiTimeMode} from './time-management.js';
 export const LEVELS={
   beginner:{label:'入門',detail:'適合初學者',skill:0,movetime:350},
@@ -196,18 +197,17 @@ export class ChessSession{
   }
   pgnWithVariations(){return exportAnnotatedPgn(this);}
   importPgn(text){
-    const loaded=new Chess();loaded.loadPgn(text,{strict:false});
-    const headers=loaded.getHeaders?.()||{};
-    const initial=headers.FEN||DEFAULT_POSITION;
-    const verified=new Chess(initial);
-    loaded.history().forEach(san=>verified.move(san));
-    this.initialFen=initial;this.game=verified;this.historyIndex.attach(this.game,this.initialFen);
-    this.viewCache=null;this.boardStatusCache=null;this.headers={...headers};this.cursor=this.ply;this.lastMove=this.moves.at(-1)||null;
-    this.study=new StudyBook();
-    const commentAt=new Chess(initial);if(loaded.getComments){const commentMap=new Map(loaded.getComments().map(x=>[x.fen,x.comment]));if(commentMap.has(commentAt.fen()))this.study.setNote(0,commentMap.get(commentAt.fen()));for(const [i,san] of loaded.history().entries()){commentAt.move(san);if(commentMap.has(commentAt.fen()))this.study.setNote(i+1,commentMap.get(commentAt.fen()));}}
-    const result=headers.Result||text.trim().match(/(?:^|\s)(1-0|0-1|1\/2-1\/2)\s*$/)?.[1]||'*';
-    this.result=result==='1-0'?{winner:'w',kind:'pgn'}:result==='0-1'?{winner:'b',kind:'pgn'}:result==='1/2-1/2'?{winner:null,kind:'pgn'}:null;
-    this.config.mode='local';this.config.time='none';this.clock=new ChessClock('none');this.clockSnapshots=[];this.pendingDrawOffer=null;
+    // Build and validate every SAN/RAV branch BEFORE mutating the active session.
+    const parsed=parseAnnotatedPgn(text);
+    const verified=new Chess(parsed.initialFen);
+    for(const san of parsed.moves)verified.move(san,{strict:true});
+    this.initialFen=parsed.initialFen;this.game=verified;this.historyIndex.attach(this.game,this.initialFen);
+    this.viewCache=null;this.boardStatusCache=null;this.headers={...parsed.headers};
+    this.cursor=this.ply;this.lastMove=this.moves.at(-1)||null;this.study=parsed.study;
+    this.result=parsed.result==='1-0'?{winner:'w',kind:'pgn'}:parsed.result==='0-1'
+      ?{winner:'b',kind:'pgn'}:parsed.result==='1/2-1/2'?{winner:null,kind:'pgn'}:null;
+    this.config.mode='local';this.config.time='none';this.clock=new ChessClock('none');
+    this.clockSnapshots=[];this.pendingDrawOffer=null;
   }
   serialize(){return {version:1,config:this.config,initialFen:this.initialFen,headers:this.headers,moves:this.moves.map(m=>m.san),result:this.result,pendingDrawOffer:this.status()?null:this.pendingDrawOffer,clock:this.clock.snapshot(),clockSnapshots:this.clockSnapshots,study:this.study.serialize()};}
   restore(saved,{resumeClock=true,accountElapsed=false,strictStudy=false}={}){

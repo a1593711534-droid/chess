@@ -1,3 +1,11 @@
+## v2.3.9 · PGN recursive import and whole-game Stockfish review
+
+- Import **legal nested PGN RAV variations** into editable study branches, including comments and standard numerical/punctuation NAGs, from a single PGN game. Invalid SAN/RAV is rejected before changing the active study.
+- Preserve branch annotations and RAV on PGN export and strict JSON restore. Custom board arrows/marks still require JSON backup, not plain PGN.
+- Analyze the **entire mainline** with local Stockfish 19: a fixed per-position time budget, approximate centipawn loss and explicit move classifications. The result is a best-effort engine review **not an official accuracy score**, and mating evaluations without a CP score are not converted to invented values.
+- Review can be stopped; it runs after the game in AI/timed modes or on imported/untimed local games, without uploading user data. Review results are ephemeral and are not included in game backups.
+- Add adversarial PGN and fake-engine unit tests, real browser regression checks, and offline cache coverage.
+
 ## v2.3.8 · Mutual draw agreement & hierarchical PGN study
 
 - In local two-player games, offer a draw before making a move; the opponent can accept, explicitly decline, or reject by moving. Pending offers survive validated backup restore.

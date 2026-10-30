@@ -1,3 +1,11 @@
+## 2.3.9 — Bidirectional RAV PGN and local full-game engine review
+
+- Parse nested RAV, move comments, numeric and symbolic NAGs into legal, editable study trees.
+- Export move comments and NAGs from mainline and child branches; strict JSON backup validates annotations.
+- Add cancellable mainline Stockfish review with per-move approximate centipawn loss (not an official accuracy metric).
+- Enforce bounded PGN input / branch depth and preserve data on rejected imports.
+- Add dedicated regression tests and new modules to the offline Service Worker precache.
+
 ## 2.3.8 — FIDE draw agreement and nested study variations
 
 - Add draw-offer, acceptance, refusal and move-based refusal for local two-player games.

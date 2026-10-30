@@ -502,3 +502,13 @@ button{touch-action:manipulation}
 #confirm-modal #claim-draw-announced-label{display:block;margin:14px 0 8px;font-weight:700}
 #confirm-modal .claim-draw-select{display:block;width:100%;min-height:44px;max-width:100%;margin-bottom:16px}
 #confirm-modal .claim-draw-select:focus-visible{outline:3px solid #d4ad71;outline-offset:3px}
+
+/* Full-game review has bounded scrolling and full keyboard navigation. */
+.game-review-controls{margin-top:14px}
+.game-review-controls #review-game{min-height:44px}
+.game-review-results{padding:10px 0;font-size:14px;line-height:1.65}
+.game-review-results p{margin:6px 0}
+.game-review-results .review-disclaimer{opacity:.8}
+.review-moves{display:flex;flex-wrap:wrap;gap:7px;max-height:340px;overflow-y:auto;overscroll-behavior:contain;padding:8px 2px}
+.review-move{white-space:normal;text-align:left;min-height:38px}
+.review-move:focus-visible{outline:3px solid #d4ad71;outline-offset:2px}

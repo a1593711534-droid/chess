@@ -116,7 +116,24 @@ function serializedForSave(){
   if(training&&clockBeforeTraining)data.clock={...clockBeforeTraining};
   else if(variation&&clockBeforeVariation)data.clock={...clockBeforeVariation};
   if(menuVisible()&&menuPauseSide&&!session.done)data.clock.active=menuPauseSide;
+  // Save the logical clock side, rather than the temporary paused Worker-loading state.
+  if(engineLoadingClockSide&&!training&&!variation&&!session.done)data.clock.active=engineLoadingClockSide;
+  if(variation)data.variationDraft={
+    origin:variation.origin,fen:variation.fen,moves:[...variation.moves],
+    persistedBranchIndex:session.study.branches.indexOf(variation.persistedBranch),
+  };
   return data;
+}
+/** Restore the editable variation, not only the mainline study branches. */
+function restoreVariationDraft(saved){
+  const draft=session.variationDraft;
+  if(!draft)return;
+  const game=new Chess(draft.fen);
+  for(const u of draft.moves)game.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]},{strict:true});
+  variation={origin:draft.origin,fen:draft.fen,moves:[...draft.moves],game,
+    persistedBranch:draft.persistedBranchIndex<0?null:session.study.branches[draft.persistedBranchIndex]};
+  clockBeforeVariation={...session.clock.snapshot(),active:saved.clock?.active||null};
+  session.clock.pause();
 }
 function saveTime(value){
   const date=value?new Date(value):null;
@@ -210,10 +227,11 @@ function loadManual(){
       $('position-note').dataset.ply='';usingFallback=false;
       prefs={...prefs,...manual.game.config,side:prefs.side==='random'?'random':manual.game.config.side};renderSettings();
       flipped=session.config.mode==='ai'&&session.config.side==='b';
-      variation=null;training=null;flippedBeforeTraining=null;clockBeforeVariation=null;clockBeforeTraining=null;lastHint=null;render();save();closeMainMenu();toast('已載入手動存檔。');
+      variation=null;training=null;flippedBeforeTraining=null;clockBeforeVariation=null;clockBeforeTraining=null;lastHint=null;
+      restoreVariationDraft(manual.game);render();save();closeMainMenu();toast('已載入手動存檔。');
     }catch(error){toast('存檔損毀，無法讀取：'+error.message,'error');}
   };
-  if(sessionActive&&!session.done)showConfirm('載入手動存檔？','目前棋局會被手動存檔取代。',restore,'載入');
+  if(sessionActive&&(!session.done||variation?.moves.length))showConfirm('載入手動存檔？','目前棋局會被手動存檔取代。',restore,'載入');
   else restore();
 }
 function cancelSearch({preserveAnalysis=false}={}){
@@ -238,7 +256,7 @@ function initialGame(){
   usingFallback=false;render();closeDrawers();closeMainMenu();save();
 }
 function showNewGame(){
-  const hasResearch=!!(Object.keys(session.study.notes).length||Object.keys(session.study.marks).length||session.study.branches.length);
+  const hasResearch=!!(Object.keys(session.study.notes).length||Object.keys(session.study.marks).length||session.study.branches.length||variation?.moves.length);
   if(sessionActive&&(session.ply>0||session.done||hasResearch)){
     showConfirm('開始新對局？','目前的棋局與研究資料會被新棋局取代，請先下載完整研究備份。',initialGame,'確定開始新局');
   }else initialGame();
@@ -272,7 +290,7 @@ function showPromotion(from,to,color){
 }
 function startExercise(exercise){
   cancelSearch();
-  if(variation){variation=null;restoreClockFromStudy(clockBeforeVariation);clockBeforeVariation=null;}
+  if(variation&&!parkVariation())return;
   if(!training)clockBeforeTraining=suspendClockForStudy();
   if(!training)flippedBeforeTraining=flipped;
   training=new TrainingSession(exercise);trainingToken++;
@@ -303,7 +321,7 @@ function openingExercise(row){
   return {id:'opening:'+row.eco,title:row.name,fen:new Chess().fen(),line,category:'開局演練',goal:`以白方完成 ${row.eco} 精選開局路線。黑方會依教學路線回應。`};
 }
 function variationMove(input){
-  if(!variation)return;try{const m=variation.game.move(input,{strict:true});variation.moves.push(moveToUci(m));playSound(m.captured?'capture':'move',prefs.sound);render();}
+  if(!variation)return;try{const m=variation.game.move(input,{strict:true});variation.moves.push(moveToUci(m));playSound(m.captured?'capture':'move',prefs.sound);render();save();}
   catch{toast('不合法的變例著法。','error');}
 }
 function beginVariation(){
@@ -312,22 +330,40 @@ function beginVariation(){
   cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
   const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();closeDrawers();toast('變例探索：現在可從此局面自由走棋。','info');
 }
-function finishVariation(){
-  if(!variation)return;
-  if(variation.moves.length){try{
-    variation.persistedBranch=session.study.upsertBranch(variation.origin,variation.fen,variation.moves,variation.persistedBranch);
-    if(save())toast('已儲存變例，可在棋譜頁面再次開啟。');
-    else toast('變例僅保留在目前分頁，請立即下載完整研究備份。','error');
-  }catch(e){toast(`變例尚未儲存：${e.message}。目前變例仍在，可先複製 PGN。`,'error');return;}}
+/** Commit the current draft before leaving; keep the editor open if persistence fails. */
+function persistVariationDraft(){
+  if(!variation?.moves.length)return true;
+  try{
+    variation.persistedBranch=session.study.upsertBranch(
+      variation.origin,variation.fen,variation.moves,variation.persistedBranch);
+    if(!save()){
+      toast('變例尚未安全儲存，請下載完整研究備份。','error');
+      return false;
+    }
+    return true;
+  }catch(e){
+    toast(`變例尚未儲存：${e.message}。目前變例仍在，可先複製 PGN。`,'error');
+    return false;
+  }
+}
+function parkVariation(){
+  if(!variation)return true;
+  if(!persistVariationDraft())return false;
   variation=null;restoreClockFromStudy(clockBeforeVariation);clockBeforeVariation=null;
+  save();return true;
+}
+function finishVariation(){
+  if(!variation||!parkVariation())return;
   render();save();resumeBotIfNeeded();
+  toast('已儲存變例，可在棋譜頁面再次開啟。');
 }
 function openVariation(index){
   if(training){toast('請先離開訓練模式。','info');return;}
+  if(variation&&!parkVariation())return;
   const branch=session.study.branches[index];if(!branch)return;
-  cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
+  cancelSearch();clockBeforeVariation=suspendClockForStudy();
   const g=new Chess(branch.fen);for(const u of branch.moves)g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]});
-  variation={origin:branch.origin,fen:branch.fen,game:g,moves:[...branch.moves]};render();closeDrawers();toast('已載入變例，可繼續探索；儲存後新增分支。','info');
+  variation={origin:branch.origin,fen:branch.fen,game:g,moves:[...branch.moves],persistedBranch:branch};render();closeDrawers();toast('已載入變例，可繼續探索並儲存修改。','info');
 }
 function makeMove(input,computer=false){
   cancelSearch();

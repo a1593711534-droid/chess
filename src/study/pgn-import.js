@@ -93,9 +93,10 @@ export function parseAnnotatedPgn(text){
       if(!current().moves.length)throw Error('PGN 變例不得為空');
       frames.pop();i++;continue;
     }
-    const end=body.slice(i).search(/[\s(){};]/);
-    const raw=end===-1?body.slice(i):body.slice(i,i+end);
-    i+=raw.length;
+    let end=i;
+    while(end<body.length&&!/[\s(){};]/.test(body[end]))end++;
+    const raw=body.slice(i,end);
+    i=end;
     if(!raw)throw Error('PGN 含不支援的語法');
     if(/^\$/.test(raw)){if(!/^\$\d+$/.test(raw))throw Error('無效 PGN NAG');appendNag(Number(raw.slice(1)));continue;}
     if(RESULT.test(raw)){

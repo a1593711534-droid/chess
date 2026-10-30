@@ -649,12 +649,13 @@ function importPgn(){
       const data=JSON.parse(text);dataForImport=data.game;
       if(data.format!=='chess-atelier-study-v1'||!data.game||typeof data.game.config!=='object')throw Error('研究備份格式無效');
       next=new ChessSession(data.game.config);
-      next.restore(data.game,{resumeClock:!menuVisible(),strictStudy:true});
+      next.restore(data.game,{resumeClock:false,strictStudy:true});
       importedActiveSide=data.game.clock?.active||null;
     }else{next=new ChessSession({...prefs,mode:'local',time:'none'});next.importPgn(text);}
     const applyImport=()=>{
     cancelSearch();engine?.newGame();exitTraining(false);variation=null;clockBeforeVariation=null;session=next;
     restoreVariationDraft(dataForImport);
+    if(isBackup&&!menuVisible()&&!variation&&!session.done&&importedActiveSide)session.clock.resume(importedActiveSide);
     $('position-note').dataset.ply='';flipped=isBackup&&session.config.mode==='ai'&&session.config.side==='b';
     menuPauseSide=isBackup&&menuVisible()?importedActiveSide:null;
     usingFallback=false;lastHint=null;analysisInfo=null;analysisFen=null;

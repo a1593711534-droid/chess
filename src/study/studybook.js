@@ -1,6 +1,14 @@
 import {Chess} from '../../vendor/chess.js';
+const validNotes=(raw,max)=>raw&&typeof raw==='object'&&!Array.isArray(raw)
+  &&Object.entries(raw).every(([key,value])=>/^\d{1,4}$/.test(key)
+    &&Number(key)<=max&&typeof value==='string'&&value.length<=500);
+const validNags=(raw,max)=>raw&&typeof raw==='object'&&!Array.isArray(raw)
+  &&Object.entries(raw).every(([key,value])=>/^[1-9]\d{0,3}$/.test(key)
+    &&Number(key)<=max&&Array.isArray(value)&&value.length<=12
+    &&value.every(n=>Number.isInteger(n)&&n>=0&&n<=255));
+const copyNags=nags=>Object.fromEntries(Object.entries(nags).map(([key,value])=>[key,[...value]]));
 export class StudyBook{
-  constructor(source,{strict=false}={}){this.notes={};this.marks={};this.branches=[];this.nextBranchId=1;if(source)this.load(source,{strict});}
+  constructor(source,{strict=false}={}){this.notes={};this.marks={};this.nags={};this.branches=[];this.nextBranchId=1;if(source)this.load(source,{strict});}
   load(raw,{strict=false}={}){
     if(!raw||typeof raw!=='object'){
       if(strict)throw Error('研究備份缺少研究資料');
@@ -9,12 +17,14 @@ export class StudyBook{
     if(strict){
       if(!raw.notes||typeof raw.notes!=='object'||Array.isArray(raw.notes)||!raw.marks||typeof raw.marks!=='object'||Array.isArray(raw.marks)||!Array.isArray(raw.branches))throw Error('研究備份資料結構不完整');
       if(Object.entries(raw.notes).some(([k,v])=>!/^[0-9]{1,4}$/.test(k)||typeof v!=='string'||v.length>500))throw Error('研究備份包含無效或過長的註解');
+      if(raw.nags!==undefined&&!validNags(raw.nags,2000))throw Error('研究備份的主線 NAG 無效');
       if(Object.entries(raw.marks).some(([k,v])=>!/^[0-9]{1,4}$/.test(k)||!Array.isArray(v)||v.length>24||v.some(mark=>!/^[a-h][1-8]$/.test(mark?.from)||!/^[a-h][1-8]$/.test(mark?.to))))throw Error('研究備份包含無效的棋盤標記');
     }
     this.notes=Object.fromEntries(Object.entries(raw.notes||{}).filter(([k,v])=>/^\d{1,4}$/.test(k)&&typeof v==='string').map(([k,v])=>[k,v.slice(0,500)]));
     this.marks=Object.fromEntries(Object.entries(raw.marks||{}).filter(([k,a])=>/^\d{1,4}$/.test(k)&&Array.isArray(a)).map(([k,a])=>[k,a.filter(m=>/^[a-h][1-8]$/.test(m?.from)&&/^[a-h][1-8]$/.test(m?.to)).slice(0,24)]));
+    this.nags=validNags(raw.nags||{},2000)?copyNags(raw.nags||{}):{};
     this.branches=[];this.nextBranchId=1;for(const [index,item] of (Array.isArray(raw.branches)?raw.branches:[]).entries()){
-      try{this.addBranch(item.origin,item.fen,item.moves,{id:item.id,parentId:item.parentId,parentPly:item.parentPly});}
+      try{this.addBranch(item.origin,item.fen,item.moves,{id:item.id,parentId:item.parentId,parentPly:item.parentPly,notes:item.notes,nags:item.nags});}
       catch(error){if(strict)throw Error(`研究備份第 ${index+1} 個變例無效：${error.message}`);}
     }
   }
@@ -40,7 +50,12 @@ export class StudyBook{
       const m=g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]},{strict:true});
       normalized.push(`${m.from}${m.to}${m.promotion||''}`);
     }
-    return {origin,fen,moves:normalized,parentId,parentPly};
+    const notes=meta.notes??{},nags=meta.nags??{};
+    if(!validNotes(notes,normalized.length)||!validNags(nags,normalized.length))
+      throw Error('Invalid variation annotations');
+    return {origin,fen,moves:normalized,parentId,parentPly,
+      notes:{...notes},nags:copyNags(nags)};
+
   }
   addBranch(origin,fen,moves,meta={}){
     const candidate=this.validateBranch(origin,fen,moves,meta);
@@ -55,7 +70,9 @@ export class StudyBook{
   upsertBranch(origin,fen,moves,existing=null,meta={}){
     if(existing&&this.branches.includes(existing)){
       const candidate=this.validateBranch(origin,fen,moves,{
-        parentId:existing.parentId,parentPly:existing.parentPly});
+        parentId:existing.parentId,parentPly:existing.parentPly,
+        notes:Object.fromEntries(Object.entries(existing.notes||{}).filter(([k])=>Number(k)<=moves.length)),
+        nags:Object.fromEntries(Object.entries(existing.nags||{}).filter(([k])=>Number(k)<=moves.length))});
       if(this.branches.some(child=>child.parentId===existing.id&&child.parentPly>candidate.moves.length))
         throw Error('變例已有依附在後續著法上的子分支，無法直接刪除其起點');
       Object.assign(existing,candidate);
@@ -78,5 +95,5 @@ export class StudyBook{
     this.branches=kept.filter(b=>b.parentId===null||ids.has(b.parentId));
   }
   branchPgn(branch){const g=new Chess(branch.fen);g.header('Event','Chess Atelier PRO Study Variation','SetUp','1','FEN',branch.fen);for(const u of branch.moves)g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]});return g.pgn({maxWidth:72});}
-  serialize(){return {notes:this.notes,marks:this.marks,branches:this.branches};}
+  serialize(){return {notes:this.notes,marks:this.marks,nags:this.nags,branches:this.branches};}
 }

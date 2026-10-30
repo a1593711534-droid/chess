@@ -798,7 +798,7 @@ function bindActions(){
     label.textContent='預定著法';
     const select=document.createElement('select');
     select.id='claim-draw-announced-move';
-    select.className='form-select';
+    select.className='select-field claim-draw-select';
     for(const m of options){
       const option=document.createElement('option');
       option.value=m.uci;

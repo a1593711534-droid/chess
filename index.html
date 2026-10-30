@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant" data-app-version="2.3.7">
+<html lang="zh-Hant" data-app-version="2.3.8">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -9,14 +9,14 @@
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./styles/base.css" />
   <link rel="stylesheet" href="./styles/layout.css" />
-  <link rel="stylesheet" href="./styles/board.css?v=2.3.7" />
-  <link rel="stylesheet" href="./styles/mobile.css?v=2.3.7" />
+  <link rel="stylesheet" href="./styles/board.css?v=2.3.8" />
+  <link rel="stylesheet" href="./styles/mobile.css?v=2.3.8" />
   <link rel="stylesheet" href="./styles/pro.css" />
   <link rel="stylesheet" href="./styles/viewport.css?v=layout-20261030" />
-  <link rel="stylesheet" href="./styles/main-menu.css?v=2.3.7" />
-  <link rel="stylesheet" href="./styles/readability.css?v=2.3.7" />
+  <link rel="stylesheet" href="./styles/main-menu.css?v=2.3.8" />
+  <link rel="stylesheet" href="./styles/readability.css?v=2.3.8" />
   <link rel="stylesheet" href="./styles/focus.css?v=20261030" />
-  <link rel="stylesheet" href="./styles/experience.css?v=2.3.7" />
+  <link rel="stylesheet" href="./styles/experience.css?v=2.3.8" />
   </head>
 <body>
   <div class="app-shell" id="app">
@@ -156,11 +156,11 @@
   </div>
   <div class="modal-backdrop hidden" id="promotion-modal" role="dialog" aria-modal="true" aria-labelledby="promotion-title"><div class="modal-card promotion-card"><div class="eyebrow">PAWN PROMOTION</div><h2 id="promotion-title">選擇升變棋子</h2><p>兵抵達底線，選擇你要升變的棋子。</p><div class="promotion-options" id="promotion-options"></div><button class="text-button" id="promotion-cancel">取消</button></div></div>
   <div class="modal-backdrop hidden" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><div class="modal-card"><div class="eyebrow">CONFIRM ACTION</div><h2 id="confirm-title">確定要認輸？</h2><p id="confirm-text">此操作將結束目前對局。</p><div class="modal-actions"><button class="secondary-button" id="confirm-cancel">返回棋局</button><button class="primary-button" id="confirm-yes">確認</button></div></div></div>
-  <div class="modal-backdrop hidden" id="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title"><div class="modal-card import-card"><div class="eyebrow">IMPORT GAME</div><h2 id="import-title">匯入 PGN／研究備份</h2><p>貼上 PGN 或先前下載的完整研究備份 JSON。匯入將取代目前對局；完整研究備份可保留分支與標記。</p><textarea id="pgn-input" spellcheck="false" placeholder="[Event &quot;My Game&quot;]&#10;&#10;1. e4 e5 2. Nf3 Nc6 ..."></textarea><div class="import-error" id="import-error" aria-live="polite"></div><div class="modal-actions"><button class="secondary-button" id="import-cancel">取消</button><button class="primary-button" id="import-confirm">匯入棋譜</button></div></div></div>
+  <div class="modal-backdrop hidden" id="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title"><div class="modal-card import-card"><div class="eyebrow">IMPORT GAME</div><h2 id="import-title">匯入 PGN／研究備份</h2><p>貼上 PGN 或先前下載的完整研究備份 JSON。匯入將取代目前對局；一般 PGN 匯入只還原主線。若要完整保留多層變例、註解與棋盤標記，請使用研究備份 JSON。</p><textarea id="pgn-input" spellcheck="false" placeholder="[Event &quot;My Game&quot;]&#10;&#10;1. e4 e5 2. Nf3 Nc6 ..."></textarea><div class="import-error" id="import-error" aria-live="polite"></div><div class="modal-actions"><button class="secondary-button" id="import-cancel">取消</button><button class="primary-button" id="import-confirm">匯入棋譜</button></div></div></div>
   <div class="modal-backdrop main-menu-backdrop" id="main-menu-modal" role="dialog" aria-modal="true" aria-labelledby="menu-title">
     <div class="main-menu-card">
       <div class="main-menu-top">
-        <div class="main-menu-brand"><span class="brand-mark">♞</span><div><div class="eyebrow">CHESS ATELIER PRO</div><h1 id="menu-title">棋境</h1><p>專業離線西洋棋工作站 <span id="menu-version">v2.3.7</span></p></div></div>
+        <div class="main-menu-brand"><span class="brand-mark">♞</span><div><div class="eyebrow">CHESS ATELIER PRO</div><h1 id="menu-title">棋境</h1><p>專業離線西洋棋工作站 <span id="menu-version">v2.3.8</span></p></div></div>
         <div class="menu-top-controls"><div class="engine-status"><span class="status-dot" id="engine-dot"></span><span id="engine-status">正在載入引擎</span></div><button id="menu-close" class="icon-button" aria-label="返回棋局">✕</button><button id="mobile-settings" class="hidden" aria-hidden="true" tabindex="-1"></button></div>
       </div>
       <div class="main-menu-grid">
@@ -260,6 +260,6 @@
     </div>
   </div>
   <div class="toast-stack" id="toast-stack" role="status" aria-live="polite"></div>
-  <script type="module" src="./src/main.js?v=2.3.7"></script>
+  <script type="module" src="./src/main.js?v=2.3.8"></script>
 </body>
 </html>

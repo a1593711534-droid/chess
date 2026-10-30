@@ -15,7 +15,7 @@ import {playSound} from './utils/sound.js';
 import {decorateIcons} from './utils/icons.js';
 import {CATEGORIES,recordPuzzle} from './data/puzzles.js';
 import {TrainingSession} from './study/training.js';
-import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.8';
+import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.9';
 
 const $=id=>document.getElementById(id);
 let prefs=loadPrefs();

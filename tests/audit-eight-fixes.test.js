@@ -46,7 +46,8 @@ test('variation draft survives strict restore without silently creating duplicat
   assert.deepEqual(restored.variationDraft,data.variationDraft);
   assert.equal(restored.study.branches.length,0);
   const corrupted=copy(data);
-  corrupted.variationDraft.fen=new Chess().move('e4').after;
+  const different=new Chess();different.move('Nf3');different.move('Nf6');
+  corrupted.variationDraft.fen=different.fen();
   assert.throws(()=>session().restore(corrupted,{strictStudy:true}),/草稿起點與主線不一致/);
   corrupted.variationDraft={...data.variationDraft,persistedBranchIndex:42};
   assert.throws(()=>session().restore(corrupted,{strictStudy:true}),/Invalid variation draft/);

@@ -269,7 +269,8 @@ export class ChessSession{
           &&this.headers.Result!==(result.winner==='w'?'1-0':result.winner==='b'?'0-1':'1/2-1/2'))
           throw Error('Invalid saved PGN result');
       }
-      this.result={winner:result.winner,kind:result.kind};
+      this.result={winner:result.winner,kind:result.kind,
+        ...(result.announcedMove===undefined?{}:{announcedMove:result.announcedMove})};
     }
     if(this.status())this.clock.pause();
   }

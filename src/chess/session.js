@@ -157,7 +157,7 @@ export class ChessSession{
         else if(this.pendingDrawOffer.stage==='pending-reply')this.pendingDrawOffer=null;
       }
       // Checkmate/draw ends the clock immediately; neither side can later flag.
-      if(this.status())this.clock.pause();
+      if(this.status()){this.pendingDrawOffer=null;this.clock.pause();}
       return result;
     }catch{return null;}
   }
@@ -209,7 +209,7 @@ export class ChessSession{
     this.result=result==='1-0'?{winner:'w',kind:'pgn'}:result==='0-1'?{winner:'b',kind:'pgn'}:result==='1/2-1/2'?{winner:null,kind:'pgn'}:null;
     this.config.mode='local';this.config.time='none';this.clock=new ChessClock('none');this.clockSnapshots=[];this.pendingDrawOffer=null;
   }
-  serialize(){return {version:1,config:this.config,initialFen:this.initialFen,headers:this.headers,moves:this.moves.map(m=>m.san),result:this.result,pendingDrawOffer:this.pendingDrawOffer,clock:this.clock.snapshot(),clockSnapshots:this.clockSnapshots,study:this.study.serialize()};}
+  serialize(){return {version:1,config:this.config,initialFen:this.initialFen,headers:this.headers,moves:this.moves.map(m=>m.san),result:this.result,pendingDrawOffer:this.status()?null:this.pendingDrawOffer,clock:this.clock.snapshot(),clockSnapshots:this.clockSnapshots,study:this.study.serialize()};}
   restore(saved,{resumeClock=true,accountElapsed=false,strictStudy=false}={}){
     if(!saved||saved.version!==1||!saved.config||typeof saved.config!=='object'||Array.isArray(saved.config)||!Array.isArray(saved.moves)||saved.moves.length>2000)throw Error('Invalid saved game');
     if(!['ai','local'].includes(saved.config.mode)
@@ -277,7 +277,7 @@ export class ChessSession{
       if(!result||typeof result!=='object'||Array.isArray(result)
         ||!RESULT_KINDS.has(result.kind)||!Object.hasOwn(result,'winner')
         ||(result.winner!==null&&!['w','b'].includes(result.winner))
-        ||(result.kind==='draw'&&result.winner!==null)
+        ||(['draw','agreement'].includes(result.kind)&&result.winner!==null)
         ||(result.announcedMove!==undefined
           &&(!['threefold-claim','fifty-move-claim'].includes(result.kind)
             ||typeof result.announcedMove!=='string'

@@ -1,3 +1,10 @@
+## v2.3.8 · Mutual draw agreement & hierarchical PGN study
+
+- In local two-player games, offer a draw before making a move; the opponent can accept, explicitly decline, or reject by moving. Pending offers survive validated backup restore.
+- Save multiple levels of study branches with stable parent IDs and exact legal anchor positions; newly created branches can themselves have child branches.
+- Copy/download annotated PGN with nested recursive annotation variations (RAV) and mainline notes.
+- **Import limitation:** PGN import remains mainline-only. JSON study backup is the lossless round-trip format, preserving nested branches, notes and board marks.
+
 ## v2.3.7 · Professional integrity and FIDE draw claims
 
 - Destructive PGN/study imports require explicit confirmation whenever an existing game, result, note, board mark or variation could be overwritten.

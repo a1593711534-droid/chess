@@ -670,7 +670,7 @@ function exportStudyBackup(){
   toast('完整研究備份已下載（含變例、標記和註解）。','success');
 }
 function exportPgn(){
-  const file=new Blob([session.pgn()+'\n'],{type:'application/x-chess-pgn;charset=utf-8'}),url=URL.createObjectURL(file);
+  const file=new Blob([session.pgnWithVariations()+'\n'],{type:'application/x-chess-pgn;charset=utf-8'}),url=URL.createObjectURL(file);
   const link=document.createElement('a');link.href=url;link.download=`Chess-Atelier-${new Date().toISOString().slice(0,10)}.pgn`;link.click();
   setTimeout(()=>URL.revokeObjectURL(url),2000);toast('PGN 棋譜已匯出。');
 }
@@ -874,7 +874,7 @@ function bindActions(){
   $('puzzle-filter').onchange=e=>{puzzleFilter=e.target.value;trainingRenderKey=null;renderTraining();};
   $('training-reset').onclick=()=>{if(training){trainingToken++;training.restart();render();}};
   $('training-exit').onclick=()=>exitTraining();
-  $('copy-fen').onclick=()=>copyText(activeGame().fen(),'FEN 局面');$('copy-pgn').onclick=()=>copyText(session.pgn(),'主線 PGN 棋譜');$('export-btn').onclick=exportPgn;
+  $('copy-fen').onclick=()=>copyText(activeGame().fen(),'FEN 局面');$('copy-pgn').onclick=()=>copyText(session.pgnWithVariations(),'含分支 PGN 棋譜');$('export-btn').onclick=exportPgn;
   $('download-study').onclick=exportStudyBackup;
   $('import-pgn').onclick=()=>{$('pgn-input').value='';$('import-error').textContent='';openModal('import-modal');};
   $('import-confirm').onclick=importPgn;$('import-cancel').onclick=()=>closeModal('import-modal');

@@ -3,7 +3,7 @@
  * This is deliberately independent of the chess engine: a damaged or stale
  * index.html should produce an actionable message instead of a blank board.
  */
-export const APP_VERSION='2.3.7';
+export const APP_VERSION='2.3.8';
 
 // Every literal id accessed by the application at startup or during gameplay.
 // Kept explicit so tests can detect newly added UI references.

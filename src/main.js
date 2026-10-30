@@ -622,15 +622,15 @@ function openModal(id){
 function closeModal(id){
   $(id).classList.add('hidden');
   if(id==='confirm-modal'){
-    $('claim-draw-announced-label')?.remove();
-    $('claim-draw-announced-move')?.remove();
+    document.getElementById('claim-draw-announced-label')?.remove();
+    document.getElementById('claim-draw-announced-move')?.remove();
   }
   const previous=modalFocus.get(id);modalFocus.delete(id);
   if(previous?.isConnected)previous.focus({preventScroll:true});
 }
 function showConfirm(title,text,callback,buttonLabel='確認'){
-  $('claim-draw-announced-label')?.remove();
-  $('claim-draw-announced-move')?.remove();
+  document.getElementById('claim-draw-announced-label')?.remove();
+  document.getElementById('claim-draw-announced-move')?.remove();
   $('confirm-title').textContent=title;$('confirm-text').textContent=text;$('confirm-yes').textContent=buttonLabel;confirmCallback=callback;openModal('confirm-modal');}
 async function copyText(value,name){
   try{await navigator.clipboard.writeText(value);toast(`已複製${name}。`);}

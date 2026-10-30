@@ -138,6 +138,8 @@ with sync_playwright() as pw:
       page.locator('#import-pgn').click()
       page.locator('#pgn-input').fill(backup)
       page.locator('#import-confirm').click()
+      assert page.locator('#confirm-modal').is_visible(), 'existing research must be confirmed before import'
+      page.locator('#confirm-yes').click()
       assert page.locator('.variation-item').count()==1
       page.locator('#focus-open-study').click();page.locator('#tab-analysis').click();assert page.locator('#multi-pv option').count()==3
       # Native drag-and-drop must reach the target square.
@@ -150,6 +152,8 @@ with sync_playwright() as pw:
       page.locator('#import-pgn').click()
       page.locator('#pgn-input').fill('[Event "Imported"]\n\n1. e4 e5 1-0')
       page.locator('#import-confirm').click()
+      assert page.locator('#confirm-modal').is_visible(), 'import must not silently overwrite the current game'
+      page.locator('#confirm-yes').click()
       assert '白方勝利' in page.locator('#game-status-title').inner_text()
       print('USER FLOW / DRAG / KEYBOARD / PGN OK',flush=True)
       assert not errs,errs

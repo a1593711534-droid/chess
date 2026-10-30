@@ -141,3 +141,14 @@ test('editing a parent variation cannot silently invalidate descendant anchor FE
   assert.deepEqual(root.moves,['c7c5','g1f3']);
   assert.doesNotThrow(()=>make().restore(s.serialize(),{strictStudy:true}));
 });
+
+test('checkmated final position is reported as unscored rather than engine failure',async()=>{
+  const s=make();
+  for(const san of ['f3','e5','g4','Qh4#'])s.play(san);
+  let searches=0;
+  const engine={async search(_fen,{onInfo}){searches++;onInfo({cp:0,mate:null,multiPV:1});return 'e2e4';}};
+  const rows=await analyzeFullGame(s,engine);
+  assert.equal(rows.length,4);
+  assert.equal(searches,4,'the final no-legal-move position must not be searched');
+  assert.equal(rows[3].loss,null);assert.equal(rows[3].label,'未判定');
+});

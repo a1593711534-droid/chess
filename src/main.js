@@ -61,7 +61,7 @@ function createEngine(){
     const dot=$('engine-dot'),label=$('engine-status');
     dot.className='status-dot'+(status==='ready'?' ready':status==='error'?' error':'');
     label.textContent={loading:'正在載入 Stockfish 19',ready:'Stockfish 19 · 已就緒',thinking:'Stockfish 正在計算',error:'引擎未就緒 · 備援模式'}[status];
-    if(status==='error'){engineError=error;toast(`引擎無法啟動：${error?.message||'未知錯誤'}，下次請求會嘗試重新啟動。`,'error');}
+    if(status==='error'){engineError=error;if(error)toast(`引擎無法啟動：${error.message}，下次請求會嘗試重新啟動。`,'error');}
     if(status==='ready'){engineError=null;usingFallback=false;if(board)renderPlayers();}
   });
 }
@@ -328,11 +328,11 @@ function beginVariation(){
   if(training){toast('請先離開訓練模式。','info');return;}
   if(variation?.moves.length){toast('請先儲存目前變例，再建立新的分支。','info');return;}
   cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
-  const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();closeDrawers();toast('變例探索：現在可從此局面自由走棋。','info');
+  const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();save();closeDrawers();toast('變例探索：現在可從此局面自由走棋。','info');
 }
 /** Commit the current draft before leaving; keep the editor open if persistence fails. */
 function persistVariationDraft(){
-  if(!variation?.moves.length)return true;
+  if(!variation||(!variation.moves.length&&!variation.persistedBranch))return true;
   try{
     variation.persistedBranch=session.study.upsertBranch(
       variation.origin,variation.fen,variation.moves,variation.persistedBranch);

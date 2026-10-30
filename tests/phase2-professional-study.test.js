@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Chess} from '../vendor/chess.js';
+import {readFileSync} from 'node:fs';
 import {ChessSession} from '../src/chess/session.js';
 import {StudyBook} from '../src/study/studybook.js';
 
@@ -96,4 +97,9 @@ test('old backup branches without IDs remain compatible, new ancestry is validat
   const illegal=copy(restored.serialize());
   illegal.study.branches.push({origin:1,fen:s.game.fen(),moves:['d7d5'],id:2,parentId:500,parentPly:0});
   assert.throws(()=>local().restore(illegal,{strictStudy:true}),/變例無效/);
+});
+
+test('offline shell precaches recursive PGN module required by session imports',()=>{
+  const sw=readFileSync(new URL('../sw.js',import.meta.url),'utf8');
+  assert.match(sw,/'src\/study\/pgn-variation\.js'/);
 });

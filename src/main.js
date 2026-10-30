@@ -436,7 +436,7 @@ async function runBot(){
 
 function doUndo(confirmed=false){
   if(training){trainingToken++;training.restart();render();return;}
-  if(variation){if(variation.moves.length){variation.moves.pop();variation.game.undo();render();}return;}
+  if(variation){if(variation.moves.length){variation.moves.pop();variation.game.undo();render();save();}return;}
   if(session.ply===0)return;
   if(!confirmed&&session.study.hasResearchAfter(session.undoTargetPly())){
     showConfirm('悔棋會移除研究資料','被撤回著法上的註解、標記及其後的變例將被移除。請先下載完整研究備份，或取消操作。',()=>doUndo(true),'確定悔棋');
@@ -490,7 +490,11 @@ function render(){
   renderPlayers();renderMoves();renderAnalysis();renderOpenings();renderTraining();
   $('undo-btn').disabled=!training&&!variation&&session.ply===0;
   $('resign-btn').disabled=!!training||!!variation||session.done||session.ply===0;
-  $('claim-draw').disabled=!!training||!!variation||!sessionActive||!session.isHumanTurn()||!session.canClaimDraw();
+  const canClaimDraw=!training&&!variation&&sessionActive&&session.isHumanTurn()
+    &&(session.canClaimDraw()||session.claimableDrawMoves().length>0);
+  $('claim-draw').disabled=!canClaimDraw;
+  $('claim-draw').title=session.canClaimDraw()?'主張現有局面的和棋'
+    :'宣告一個將構成三次重複或50步條件的著法並主張和棋';
   updateClocks();
 }
 function renderPlayers(){
@@ -617,10 +621,17 @@ function openModal(id){
 }
 function closeModal(id){
   $(id).classList.add('hidden');
+  if(id==='confirm-modal'){
+    $('claim-draw-announced-label')?.remove();
+    $('claim-draw-announced-move')?.remove();
+  }
   const previous=modalFocus.get(id);modalFocus.delete(id);
   if(previous?.isConnected)previous.focus({preventScroll:true});
 }
-function showConfirm(title,text,callback,buttonLabel='確認'){$('confirm-title').textContent=title;$('confirm-text').textContent=text;$('confirm-yes').textContent=buttonLabel;confirmCallback=callback;openModal('confirm-modal');}
+function showConfirm(title,text,callback,buttonLabel='確認'){
+  $('claim-draw-announced-label')?.remove();
+  $('claim-draw-announced-move')?.remove();
+  $('confirm-title').textContent=title;$('confirm-text').textContent=text;$('confirm-yes').textContent=buttonLabel;confirmCallback=callback;openModal('confirm-modal');}
 async function copyText(value,name){
   try{await navigator.clipboard.writeText(value);toast(`已複製${name}。`);}
   catch{const area=document.createElement('textarea');area.value=value;area.style.position='fixed';area.style.opacity='0';document.body.append(area);area.select();const success=document.execCommand('copy');area.remove();toast(success?`已複製${name}。`:'無法複製，請使用瀏覽器的複製功能。',success?'success':'error');}
@@ -663,9 +674,15 @@ function importPgn(){
     sessionActive=true;render();save();toast(`已載入 ${session.ply} 步${isBackup?'研究備份':'棋譜'}。`);closeDrawers();if(menuVisible())closeMainMenu();
     resumeBotIfNeeded();
     };
-    if(variation?.moves.length){
+    // Import must never silently replace a live game, finished game or study.
+    // A valid incoming file is fully parsed BEFORE the confirmation is shown.
+    const hasExistingWork=sessionActive&&(session.ply>0||session.done
+      ||Object.keys(session.study.notes).length>0
+      ||Object.keys(session.study.marks).length>0
+      ||session.study.branches.length>0||!!variation?.moves.length);
+    if(hasExistingWork){
       closeModal('import-modal');
-      showConfirm('匯入將取代變例草稿','目前的研究草稿會被匯入資料取代，請先下載完整研究備份。',applyImport,'確認匯入');
+      showConfirm('匯入將取代目前棋局','目前的棋局、註解、標記與變例可能被覆寫。請先下載完整研究備份。',applyImport,'確認匯入並取代');
     }else applyImport();
   }catch(e){$('import-error').textContent=`匯入失敗：${e.message||'PGN 格式不正確'}`;}
 }
@@ -759,8 +776,37 @@ function bindActions(){
   $('claim-draw').onclick=()=>{
     if(!session.isHumanTurn())return;
     session.clock.snapshot();
-    if(!session.claimDraw())return;
-    cancelSearch();render();save();playSound('end',prefs.sound);toast('已依棋規主張和棋。','success');
+    const finish=()=>{
+      cancelSearch();render();save();playSound('end',prefs.sound);
+      toast('已依棋規主張和棋。','success');
+    };
+    if(session.canClaimDraw()){
+      if(session.claimDraw())finish();
+      return;
+    }
+    const options=session.claimableDrawMoves();
+    if(!options.length)return;
+    // FIDE announced-move claims stop the clock without playing the move.
+    showConfirm('宣告預定著法並主張和棋',
+      '選擇將造成三次重複或50步條件的合法著法；若主張有效，該著法不會實際落子。',
+      ()=>{
+        if(session.claimDraw(select.value))finish();
+        else{render();toast('主張已失效，請重新確認棋局與棋鐘。','error');}
+      },'宣告著法並主張和棋');
+    const label=document.createElement('label');
+    label.id='claim-draw-announced-label';label.htmlFor='claim-draw-announced-move';
+    label.textContent='預定著法';
+    const select=document.createElement('select');
+    select.id='claim-draw-announced-move';
+    select.className='form-select';
+    for(const m of options){
+      const option=document.createElement('option');
+      option.value=m.uci;
+      option.textContent=`${m.san} · ${m.kind==='threefold-claim'?'三次重複':'50步規則'}`;
+      select.append(option);
+    }
+    $('confirm-text').after(label,select);
+    select.focus({preventScroll:true});
   };
   $('nav-start').onclick=()=>navigate('first');$('nav-prev').onclick=()=>navigate('prev');$('nav-next').onclick=()=>navigate('next');$('nav-end').onclick=()=>navigate('last');
   const tabButtons=[...document.querySelectorAll('.panel-tab')];

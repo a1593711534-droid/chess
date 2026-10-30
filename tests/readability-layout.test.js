@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {APP_VERSION} from '../src/ui/boot.js';
 
 const css=readFileSync(new URL('../styles/readability.css',import.meta.url),'utf8');
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
@@ -9,11 +10,11 @@ const boot=readFileSync(new URL('../src/ui/boot.js',import.meta.url),'utf8');
 
 test('experience styles override focus and readability and retain a versioned cache key',()=>{
   const all=[...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(x=>x[1]);
-  assert.match(all.at(-1),/experience\.css\?v=2\.3\.6/);
+  assert.ok(all.at(-1).endsWith(`experience.css?v=${APP_VERSION}`));
   assert.equal(all.filter(x=>x.includes('styles/experience.css')).length,1);
-  assert.ok(all.some(x=>/readability\.css\?v=2\.3\.6/.test(x)));
-  assert.match(boot,/APP_VERSION='2\.3\.6'/);
-  assert.match(html,/data-app-version="2\.3\.6"/);
+  assert.ok(all.some(x=>x.endsWith(`readability.css?v=${APP_VERSION}`)));
+  assert.ok(boot.includes(`APP_VERSION='${APP_VERSION}'`));
+  assert.ok(html.includes(`data-app-version="${APP_VERSION}"`));
   assert.match(experience,/grid-template-columns:minmax\(286px,1fr\)/);
   assert.match(experience,/#main-menu-modal \.main-menu-card/);
 });

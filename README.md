@@ -1,3 +1,10 @@
+## v2.3.7 · Professional integrity and FIDE draw claims
+
+- Destructive PGN/study imports require explicit confirmation whenever an existing game, result, note, board mark or variation could be overwritten.
+- Strict timed study backups must include a valid clock and per-ply clock history; variation undo autosaves immediately.
+- FIDE 9.2.1 / 9.3.1: choose and announce a legal prospective move to claim a third repetition or the 50-move condition **without actually playing it**. Announced moves survive strict backup restore.
+- Adds dedicated automated tests, with existing browser and verified real Stockfish regression checks retained.
+
 ## v2.3.6 · Long-game performance, modular UI, real Stockfish regression (phase 3)
 
 - The main-line move history is indexed incrementally instead of repeatedly asking chess.js to undo/replay the entire game during each render. Repetition counts, review positions and position-terminal checks are cached and invalidated on play, undo, import and restore.

@@ -73,8 +73,14 @@ export class StudyBook{
         parentId:existing.parentId,parentPly:existing.parentPly,
         notes:Object.fromEntries(Object.entries(existing.notes||{}).filter(([k])=>Number(k)<=moves.length)),
         nags:Object.fromEntries(Object.entries(existing.nags||{}).filter(([k])=>Number(k)<=moves.length))});
-      if(this.branches.some(child=>child.parentId===existing.id&&child.parentPly>candidate.moves.length))
-        throw Error('變例已有依附在後續著法上的子分支，無法直接刪除其起點');
+      for(const child of this.branches.filter(branch=>branch.parentId===existing.id)){
+        if(child.parentPly>candidate.moves.length)
+          throw Error('變例已有依附在後續著法上的子分支，無法直接刪除其起點');
+        const at=new Chess(candidate.fen);
+        for(const u of candidate.moves.slice(0,child.parentPly))
+          at.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]});
+        if(at.fen()!==child.fen)throw Error('修改將破壞子變例的起點，請先另建分支');
+      }
       Object.assign(existing,candidate);
       return existing;
     }
@@ -83,11 +89,12 @@ export class StudyBook{
   hasResearchAfter(ply){
     return Object.keys(this.notes).some(k=>Number(k)>ply)
       ||Object.keys(this.marks).some(k=>Number(k)>ply)
+      ||Object.keys(this.nags).some(k=>Number(k)>ply)
       ||this.branches.some(branch=>branch.origin>ply);
   }
   /** Called only when a user confirms removing main-line moves. */
   pruneAfter(ply){
-    for(const data of [this.notes,this.marks]){
+    for(const data of [this.notes,this.marks,this.nags]){
       for(const key of Object.keys(data))if(Number(key)>ply)delete data[key];
     }
     const kept=this.branches.filter(branch=>branch.origin<=ply);

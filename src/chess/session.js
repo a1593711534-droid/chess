@@ -2,6 +2,7 @@ import {Chess,DEFAULT_POSITION} from '../../vendor/chess.js';
 import {ChessClock} from './clock.js';
 import {GameHistoryIndex} from './history-index.js';
 import {StudyBook} from '../study/studybook.js';
+import {exportAnnotatedPgn} from '../study/pgn-variation.js';
 import {normalizeAiTimeMode} from './time-management.js';
 export const LEVELS={
   beginner:{label:'入門',detail:'適合初學者',skill:0,movetime:350},
@@ -193,6 +194,7 @@ export class ChessSession{
     if(outcome)temp.header('Result',outcome.winner==='w'?'1-0':outcome.winner==='b'?'0-1':'1/2-1/2');
     return temp.pgn({maxWidth:72});
   }
+  pgnWithVariations(){return exportAnnotatedPgn(this);}
   importPgn(text){
     const loaded=new Chess();loaded.loadPgn(text,{strict:false});
     const headers=loaded.getHeaders?.()||{};

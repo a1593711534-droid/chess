@@ -35,12 +35,22 @@ export function canPossiblyMate(game,color){
   // Bishops operating on only one square colour cannot mate a bare king.
   return new Set(bishops.map(p=>('abcdefgh'.indexOf(p.square[0])+Number(p.square[1]))%2)).size>=2;
 }
+const RESULT_KINDS=new Set(['checkmate','stalemate','insufficient','fivefold','seventyfive-move',
+  'timeout','timeout-insufficient','threefold-claim','fifty-move-claim','resign','pgn','draw']);
+function validClockRecord(value){
+  return !!value&&typeof value==='object'&&!Array.isArray(value)
+    &&!!value.remaining&&typeof value.remaining==='object'&&!Array.isArray(value.remaining)
+    &&['w','b'].every(side=>Number.isFinite(value.remaining[side])&&value.remaining[side]>=0)
+    &&(value.active==null||['w','b'].includes(value.active))
+    &&(value.timeout==null||['w','b'].includes(value.timeout))
+    &&(value.savedAt===undefined||(Number.isFinite(value.savedAt)&&value.savedAt>=0));
+}
 export class ChessSession{
   constructor(prefs){this.configure(prefs);}
   configure(prefs){
     this.config={...prefs,side:prefs.side==='random'?(Math.random()<.5?'w':'b'):prefs.side};
     this.initialFen=DEFAULT_POSITION;this.game=new Chess();this.headers={};this.cursor=0;this.result=null;this.clock=new ChessClock(prefs.time);this.clockSnapshots=[];this.lastMove=null;this.study=new StudyBook();
-    this.historyIndex=new GameHistoryIndex(this.game,this.initialFen);this.viewCache=null;this.boardStatusCache=null;
+    this.historyIndex=new GameHistoryIndex(this.game,this.initialFen);this.viewCache=null;this.boardStatusCache=null;this.variationDraft=null;
   }
   get moves(){this.historyIndex.sync(this.game,this.initialFen);return this.historyIndex.moves;}
   get ply(){this.historyIndex.sync(this.game,this.initialFen);return this.historyIndex.moves.length;}
@@ -147,12 +157,18 @@ export class ChessSession{
     // Old saves used fixed time; do not silently reinterpret them.
     this.config.aiTimeMode=normalizeAiTimeMode(saved.config.aiTimeMode);
     this.initialFen=saved.initialFen||DEFAULT_POSITION;this.headers=saved.headers||{};this.game=new Chess(this.initialFen);
-    saved.moves.forEach(san=>this.game.move(san,{strict:true}));
+    const moveSides=[];saved.moves.forEach(san=>{moveSides.push(this.game.turn());this.game.move(san,{strict:true});});
     this.historyIndex.attach(this.game,this.initialFen);this.viewCache=null;this.boardStatusCache=null;
-    this.cursor=this.ply;this.lastMove=this.moves.at(-1)||null;this.result=saved.result||null;this.study=new StudyBook(saved.study,{strict:strictStudy});
+    this.cursor=this.ply;this.lastMove=this.moves.at(-1)||null;this.result=null;this.study=new StudyBook(saved.study,{strict:strictStudy});
     this.clockSnapshots=Array.isArray(saved.clockSnapshots)?saved.clockSnapshots:[];
+    if(this.clockSnapshots.some((entry,i)=>!validClockRecord(entry)||entry.timeout!=null
+      ||(strictStudy&&entry.active!=null&&entry.active!==moveSides[i]))
+      ||(strictStudy&&this.clockSnapshots.length>0&&this.clockSnapshots.length!==saved.moves.length)
+      ||(strictStudy&&this.clock.enabled&&saved.clockSnapshots!==undefined&&saved.moves.length>0&&this.clockSnapshots.length===0))
+      throw Error('Invalid saved clock history');
+    let positions=null;
     if(strictStudy){
-      const positions=[new Chess(this.initialFen).fen()],replay=new Chess(this.initialFen);
+      positions=[new Chess(this.initialFen).fen()];const replay=new Chess(this.initialFen);
       for(const san of saved.moves){replay.move(san);positions.push(replay.fen());}
       for(const branch of this.study.branches){
         if(branch.origin>=positions.length||branch.fen!==positions[branch.origin]){
@@ -163,15 +179,55 @@ export class ChessSession{
         if(Number(key)>this.ply)throw Error('研究備份包含超出主線的註解或標記');
       }
     }
-    if(saved.clock!==undefined&&saved.clock!==null){
-      if(!saved.clock||typeof saved.clock!=='object'||Array.isArray(saved.clock)
-        ||!saved.clock.remaining||['w','b'].some(side=>!Number.isFinite(saved.clock.remaining[side])||saved.clock.remaining[side]<0)
-        ||(saved.clock.active!=null&&!['w','b'].includes(saved.clock.active))
-        ||(saved.clock.timeout!=null&&!['w','b'].includes(saved.clock.timeout))){
-        throw Error('Invalid saved clock');
+    if(saved.variationDraft!=null){
+      const draft=saved.variationDraft;
+      if(!draft||typeof draft!=='object'||Array.isArray(draft)
+        ||!Number.isInteger(draft.persistedBranchIndex)||draft.persistedBranchIndex< -1
+        ||draft.persistedBranchIndex>=this.study.branches.length)throw Error('Invalid variation draft');
+      const validated=this.study.validateBranch(draft.origin,draft.fen,draft.moves);
+      if(strictStudy&&(draft.origin>=positions.length||positions[draft.origin]!==draft.fen))
+        throw Error('研究備份的變例草稿起點與主線不一致');
+      if(draft.persistedBranchIndex>=0){
+        const existing=this.study.branches[draft.persistedBranchIndex];
+        if(existing.origin!==draft.origin||existing.fen!==draft.fen)throw Error('Invalid variation draft branch');
       }
+      this.variationDraft={...validated,persistedBranchIndex:draft.persistedBranchIndex};
+    }
+    if(saved.clock!==undefined&&saved.clock!==null&&!validClockRecord(saved.clock))
+      throw Error('Invalid saved clock');
+    if(strictStudy&&saved.clock){
+      if(!this.clock.enabled&&(saved.clock.active!=null||saved.clock.timeout!=null))throw Error('Invalid saved clock');
+      if(saved.clock.active!=null&&saved.clock.active!==this.game.turn())throw Error('Invalid saved clock turn');
+      if(saved.clock.timeout!=null&&saved.clock.timeout!==this.game.turn())throw Error('Invalid saved clock timeout');
     }
     this.clock.restore(saved.clock,{resume:resumeClock,accountElapsed});
+    if(saved.result!=null){
+      const result=saved.result;
+      if(!result||typeof result!=='object'||Array.isArray(result)
+        ||!RESULT_KINDS.has(result.kind)||!Object.hasOwn(result,'winner')
+        ||(result.winner!==null&&!['w','b'].includes(result.winner))
+        ||(result.kind==='draw'&&result.winner!==null))throw Error('Invalid saved result');
+      if(strictStudy){
+        const inferred=this.status();
+        const derived=new Set(['checkmate','stalemate','insufficient','fivefold','seventyfive-move','timeout','timeout-insufficient']);
+        if(derived.has(result.kind)&&(!inferred||inferred.kind!==result.kind||inferred.winner!==result.winner))
+          throw Error('Invalid saved result for position');
+        if(!derived.has(result.kind)&&inferred
+          &&!(result.kind==='pgn'&&inferred.winner===result.winner&&inferred.kind!=='timeout'&&inferred.kind!=='timeout-insufficient'))
+          throw Error('Invalid saved result: game already finished');
+        if(result.kind==='resign'&&(this.ply===0||result.winner!==(this.config.mode==='ai'
+          ?(this.config.side==='w'?'b':'w'):(this.game.turn()==='w'?'b':'w'))))
+          throw Error('Invalid saved resignation');
+        if(result.kind==='threefold-claim'&&(result.winner!==null||this.historyIndex.repetitions()<3))
+          throw Error('Invalid saved draw claim');
+        if(result.kind==='fifty-move-claim'&&(result.winner!==null||!this.game.isDrawByFiftyMoves()))
+          throw Error('Invalid saved draw claim');
+        if(result.kind==='pgn'&&this.headers.Result&&this.headers.Result!=='*'
+          &&this.headers.Result!==(result.winner==='w'?'1-0':result.winner==='b'?'0-1':'1/2-1/2'))
+          throw Error('Invalid saved PGN result');
+      }
+      this.result={winner:result.winner,kind:result.kind};
+    }
     if(this.status())this.clock.pause();
   }
   captured(){

@@ -2,7 +2,7 @@ const PIECES={w:{k:'K',q:'Q',r:'R',b:'B',n:'N',p:'P'},b:{k:'K',q:'Q',r:'R',b:'B'
 export const pieceSrc=(type,color)=>`./assets/pieces/${color}${PIECES[color][type]}.svg`;
 const displayName={k:'國王',q:'皇后',r:'城堡',b:'主教',n:'騎士',p:'兵'};
 export function createBoard(container,onMove,onSelect,onAnnotate,onStatus){
-  let selected=null,reverse=false,possible=[],hint=null,view=null,locked=false,dragging=null,marks=[],markStart=null,annotationMode=false;
+  let selected=null,reverse=false,possible=[],hint=null,view=null,lastMove=null,locked=false,dragging=null,marks=[],markStart=null,annotationMode=false;
   // Keep square/image nodes mounted; full-board replacement flashes on some devices.
   const cells=[];let annotationsKey=null;
   function announce(message){onStatus?.(message);}
@@ -40,7 +40,7 @@ export function createBoard(container,onMove,onSelect,onAnnotate,onStatus){
     if(!view)return;
     const focusedSquare=container.contains(document.activeElement)?document.activeElement.closest('[data-square]')?.dataset.square:null;
     const files=reverse?'hgfedcba':'abcdefgh',ranks=reverse?'12345678':'87654321';
-    const last=view.history({verbose:true}).at(-1);
+    const last=lastMove;
     const check=view.isCheck()?view.board().flat().find(p=>p?.type==='k'&&p.color===view.turn())?.square:null;
     const fragment=document.createDocumentFragment();
     for(let r=0;r<8;r++)for(let c=0;c<8;c++){
@@ -129,7 +129,7 @@ export function createBoard(container,onMove,onSelect,onAnnotate,onStatus){
     if(focusedSquare)container.querySelector(`[data-square="${focusedSquare}"]`)?.focus({preventScroll:true});
   }
   return {
-    update(game,{flipped=false,disabled=false,lastHint=null,annotations=[]}={}){view=game;reverse=flipped;locked=disabled;hint=lastHint;marks=annotations;selected=null;possible=[];render();},
+    update(game,{flipped=false,disabled=false,lastHint=null,annotations=[],lastMove:move=null}={}){view=game;lastMove=move;reverse=flipped;locked=disabled;hint=lastHint;marks=annotations;selected=null;possible=[];render();},
     flip(){reverse=!reverse;render();},
     clearHint(){hint=null;render();},
     setAnnotationMode(enabled){

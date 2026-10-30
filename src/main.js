@@ -330,16 +330,14 @@ function beginVariation(){
   cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
   const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();save();closeDrawers();toast('變例探索：現在可從此局面自由走棋。','info');
 }
-/** Commit the current draft before leaving; keep the editor open if persistence fails. */
+/** Commit the draft to the study book before leaving, even without localStorage. */
 function persistVariationDraft(){
   if(!variation||(!variation.moves.length&&!variation.persistedBranch))return true;
   try{
     variation.persistedBranch=session.study.upsertBranch(
       variation.origin,variation.fen,variation.moves,variation.persistedBranch);
-    if(!save()){
-      toast('變例尚未安全儲存，請下載完整研究備份。','error');
-      return false;
-    }
+    if(!save())
+      toast('變例已保留於目前分頁的研究分支，請立即下載完整研究備份。','error');
     return true;
   }catch(e){
     toast(`變例尚未儲存：${e.message}。目前變例仍在，可先複製 PGN。`,'error');
@@ -355,7 +353,7 @@ function parkVariation(){
 function finishVariation(){
   if(!variation||!parkVariation())return;
   render();save();resumeBotIfNeeded();
-  toast('已儲存變例，可在棋譜頁面再次開啟。');
+  toast('變例已加入研究分支，可在棋譜頁面再次開啟。');
 }
 function openVariation(index){
   if(training){toast('請先離開訓練模式。','info');return;}

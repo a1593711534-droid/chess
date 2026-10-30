@@ -120,6 +120,7 @@ function serializedForSave(){
   if(engineLoadingClockSide&&!training&&!variation&&!session.done)data.clock.active=engineLoadingClockSide;
   if(variation)data.variationDraft={
     origin:variation.origin,fen:variation.fen,moves:[...variation.moves],
+    parentId:variation.parentId??null,parentPly:variation.parentPly??null,
     persistedBranchIndex:session.study.branches.indexOf(variation.persistedBranch),
   };
   return data;
@@ -131,6 +132,7 @@ function restoreVariationDraft(saved){
   const game=new Chess(draft.fen);
   for(const u of draft.moves)game.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]},{strict:true});
   variation={origin:draft.origin,fen:draft.fen,moves:[...draft.moves],game,
+    parentId:draft.parentId??null,parentPly:draft.parentPly??null,
     persistedBranch:draft.persistedBranchIndex<0?null:session.study.branches[draft.persistedBranchIndex]};
   clockBeforeVariation={...session.clock.snapshot(),active:saved.clock?.active||null};
   session.clock.pause();
@@ -326,16 +328,28 @@ function variationMove(input){
 }
 function beginVariation(){
   if(training){toast('請先離開訓練模式。','info');return;}
-  if(variation?.moves.length){toast('請先儲存目前變例，再建立新的分支。','info');return;}
-  cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
-  const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();save();closeDrawers();toast('變例探索：現在可從此局面自由走棋。','info');
+  cancelSearch();
+  let origin=session.cursor,fen=session.current.fen(),parentId=null,parentPly=null;
+  if(variation){
+    if(!variation.moves.length){
+      toast('請先在目前變例走一步，再建立子變例。','info');return;
+    }
+    // Persist the parent first: nested branches store stable IDs, not indexes.
+    if(!persistVariationDraft())return;
+    parentId=variation.persistedBranch.id;parentPly=variation.moves.length;
+    origin=variation.origin;fen=variation.game.fen();
+  }else clockBeforeVariation=suspendClockForStudy();
+  variation={origin,fen,game:new Chess(fen),moves:[],parentId,parentPly};
+  lastHint=null;render();save();closeDrawers();
+  toast(parentId?'已從目前變例建立子變例。':'變例探索：現在可從此局面自由走棋。','info');
 }
 /** Commit the draft to the study book before leaving, even without localStorage. */
 function persistVariationDraft(){
   if(!variation||(!variation.moves.length&&!variation.persistedBranch))return true;
   try{
     variation.persistedBranch=session.study.upsertBranch(
-      variation.origin,variation.fen,variation.moves,variation.persistedBranch);
+      variation.origin,variation.fen,variation.moves,variation.persistedBranch,
+      {parentId:variation.parentId??null,parentPly:variation.parentPly??null});
     if(!save())
       toast('變例已保留於目前分頁的研究分支，請立即下載完整研究備份。','error');
     return true;
@@ -361,7 +375,8 @@ function openVariation(index){
   const branch=session.study.branches[index];if(!branch)return;
   cancelSearch();clockBeforeVariation=suspendClockForStudy();
   const g=new Chess(branch.fen);for(const u of branch.moves)g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]});
-  variation={origin:branch.origin,fen:branch.fen,game:g,moves:[...branch.moves],persistedBranch:branch};render();closeDrawers();toast('已載入變例，可繼續探索並儲存修改。','info');
+  variation={origin:branch.origin,fen:branch.fen,game:g,moves:[...branch.moves],
+    parentId:branch.parentId??null,parentPly:branch.parentPly??null,persistedBranch:branch};render();closeDrawers();toast('已載入變例，可繼續探索並儲存修改。','info');
 }
 function makeMove(input,computer=false){
   cancelSearch();
@@ -735,6 +750,7 @@ function renderStudy(){
   const textarea=$('position-note');if(textarea.dataset.ply!==String(ply)){
     textarea.value=session.study.notes[String(ply)]||'';textarea.dataset.ply=String(ply);
   }
+  $('create-variation').textContent=variation?'從目前分支建立子變例':'從此建立變例';
   const strip=$('variation-strip');strip.classList.toggle('hidden',!variation);
   if(variation){$('variation-title').textContent=`第 ${variation.origin} 手之後的變例`;
     const g=new Chess(variation.fen),sans=[];for(const u of variation.moves)sans.push(g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]}).san);
@@ -743,7 +759,8 @@ function renderStudy(){
   session.study.branches.forEach((b,i)=>{
     const item=document.createElement('button');item.className='variation-item';item.type='button';
     const g=new Chess(b.fen),sans=[];for(const u of b.moves)sans.push(g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]}).san);
-    item.textContent=`分支 ${i+1} · 自第 ${b.origin} 手 · ${sans.join(' ').slice(0,80)}`;
+    const parent=b.parentId===null?'主線':`分支 #${b.parentId} 第 ${b.parentPly} 步`;
+    item.textContent=`分支 #${b.id} · ${parent} · ${sans.join(' ').slice(0,80)}`;
     item.onclick=()=>openVariation(i);dest.append(item);
   });
 }

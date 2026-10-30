@@ -14,7 +14,7 @@ import {playSound} from './utils/sound.js';
 import {decorateIcons} from './utils/icons.js';
 import {CATEGORIES,recordPuzzle} from './data/puzzles.js';
 import {TrainingSession} from './study/training.js';
-import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.7';
+import {inspectUi,showStartupError} from './ui/boot.js?v=2.3.8';
 
 const $=id=>document.getElementById(id);
 let prefs=loadPrefs();
@@ -120,6 +120,7 @@ function serializedForSave(){
   if(engineLoadingClockSide&&!training&&!variation&&!session.done)data.clock.active=engineLoadingClockSide;
   if(variation)data.variationDraft={
     origin:variation.origin,fen:variation.fen,moves:[...variation.moves],
+    parentId:variation.parentId??null,parentPly:variation.parentPly??null,
     persistedBranchIndex:session.study.branches.indexOf(variation.persistedBranch),
   };
   return data;
@@ -131,6 +132,7 @@ function restoreVariationDraft(saved){
   const game=new Chess(draft.fen);
   for(const u of draft.moves)game.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]},{strict:true});
   variation={origin:draft.origin,fen:draft.fen,moves:[...draft.moves],game,
+    parentId:draft.parentId??null,parentPly:draft.parentPly??null,
     persistedBranch:draft.persistedBranchIndex<0?null:session.study.branches[draft.persistedBranchIndex]};
   clockBeforeVariation={...session.clock.snapshot(),active:saved.clock?.active||null};
   session.clock.pause();
@@ -326,16 +328,28 @@ function variationMove(input){
 }
 function beginVariation(){
   if(training){toast('請先離開訓練模式。','info');return;}
-  if(variation?.moves.length){toast('請先儲存目前變例，再建立新的分支。','info');return;}
-  cancelSearch();if(!variation)clockBeforeVariation=suspendClockForStudy();
-  const fen=session.current.fen();variation={origin:session.cursor,fen,game:new Chess(fen),moves:[]};lastHint=null;render();save();closeDrawers();toast('變例探索：現在可從此局面自由走棋。','info');
+  cancelSearch();
+  let origin=session.cursor,fen=session.current.fen(),parentId=null,parentPly=null;
+  if(variation){
+    if(!variation.moves.length){
+      toast('請先在目前變例走一步，再建立子變例。','info');return;
+    }
+    // Persist the parent first: nested branches store stable IDs, not indexes.
+    if(!persistVariationDraft())return;
+    parentId=variation.persistedBranch.id;parentPly=variation.moves.length;
+    origin=variation.origin;fen=variation.game.fen();
+  }else clockBeforeVariation=suspendClockForStudy();
+  variation={origin,fen,game:new Chess(fen),moves:[],parentId,parentPly};
+  lastHint=null;render();save();closeDrawers();
+  toast(parentId?'已從目前變例建立子變例。':'變例探索：現在可從此局面自由走棋。','info');
 }
 /** Commit the draft to the study book before leaving, even without localStorage. */
 function persistVariationDraft(){
   if(!variation||(!variation.moves.length&&!variation.persistedBranch))return true;
   try{
     variation.persistedBranch=session.study.upsertBranch(
-      variation.origin,variation.fen,variation.moves,variation.persistedBranch);
+      variation.origin,variation.fen,variation.moves,variation.persistedBranch,
+      {parentId:variation.parentId??null,parentPly:variation.parentPly??null});
     if(!save())
       toast('變例已保留於目前分頁的研究分支，請立即下載完整研究備份。','error');
     return true;
@@ -361,7 +375,8 @@ function openVariation(index){
   const branch=session.study.branches[index];if(!branch)return;
   cancelSearch();clockBeforeVariation=suspendClockForStudy();
   const g=new Chess(branch.fen);for(const u of branch.moves)g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]});
-  variation={origin:branch.origin,fen:branch.fen,game:g,moves:[...branch.moves],persistedBranch:branch};render();closeDrawers();toast('已載入變例，可繼續探索並儲存修改。','info');
+  variation={origin:branch.origin,fen:branch.fen,game:g,moves:[...branch.moves],
+    parentId:branch.parentId??null,parentPly:branch.parentPly??null,persistedBranch:branch};render();closeDrawers();toast('已載入變例，可繼續探索並儲存修改。','info');
 }
 function makeMove(input,computer=false){
   cancelSearch();
@@ -448,7 +463,7 @@ function doUndo(confirmed=false){
 }
 function gameOutcomeText(outcome){
   if(!outcome)return '';
-  const why={timeout:'時間用盡', 'timeout-insufficient':'時間用盡，但對手無法將死',checkmate:'將死',resign:'認輸',stalemate:'逼和','threefold-claim':'主張三次重複和棋','fifty-move-claim':'主張50步和棋',fivefold:'五次重複局面','seventyfive-move':'75步規則',insufficient:'子力不足',draw:'和棋',pgn:'棋譜記錄結果'}[outcome.kind]||'和棋';
+  const why={agreement:'雙方同意和棋',timeout:'時間用盡', 'timeout-insufficient':'時間用盡，但對手無法將死',checkmate:'將死',resign:'認輸',stalemate:'逼和','threefold-claim':'主張三次重複和棋','fifty-move-claim':'主張50步和棋',fivefold:'五次重複局面','seventyfive-move':'75步規則',insufficient:'子力不足',draw:'和棋',pgn:'棋譜記錄結果'}[outcome.kind]||'和棋';
   if(!outcome.winner)return `和棋 · ${why}`;
   return `${outcome.winner==='w'?'白方':'黑方'}勝利 · ${why}`;
 }
@@ -463,6 +478,10 @@ function statusDisplay(){
   const result=session.status();
   if(result)return {title:gameOutcomeText(result),desc:'本局已結束。你可以重新開始或下載棋譜。'};
   if(!session.atLatest)return {title:'正在回看棋譜',desc:'正式棋鐘仍在倒數；回到最新局面繼續，或開啟主選單暫停。'};
+  if(session.pendingDrawOffer?.stage==='pending-reply')
+    return {title:'對手提出和棋',desc:'請選擇接受或拒絕；若直接落子，也視為拒絕。'};
+  if(session.pendingDrawOffer?.stage==='awaiting-move')
+    return {title:'提和已登記',desc:'請先完成本回合著法，提和才會正式交由對手決定。'};
   if(thinking)return {title:'引擎正在思考',desc:'電腦正在計算最佳的下一步…'};
   if(session.game.isCheck())return {title:`${session.game.turn()==='w'?'白方':'黑方'}被將軍`,desc:'國王受到攻擊，必須先解除將軍。'};
   return {title:`輪到${session.game.turn()==='w'?'白方':'黑方'}走棋`,desc:session.ply===0?'選取棋子開始你的第一步。':'仔細觀察局面，尋找下一步。'};
@@ -490,6 +509,12 @@ function render(){
   renderPlayers();renderMoves();renderAnalysis();renderOpenings();renderTraining();
   $('undo-btn').disabled=!training&&!variation&&session.ply===0;
   $('resign-btn').disabled=!!training||!!variation||session.done||session.ply===0;
+  const agreementEnabled=!training&&!variation&&sessionActive&&session.atLatest
+    &&session.config.mode==='local'&&!session.done;
+  $('offer-draw').disabled=!agreementEnabled||!!session.pendingDrawOffer;
+  $('accept-draw').classList.toggle('hidden',!agreementEnabled||!session.canRespondToDrawOffer());
+  $('decline-draw').classList.toggle('hidden',!agreementEnabled||!session.canRespondToDrawOffer());
+  $('offer-draw').title=session.pendingDrawOffer?'已有待處理的和棋提議':'走完本手棋後向對手正式提出和棋';
   const canClaimDraw=!training&&!variation&&sessionActive&&session.isHumanTurn()
     &&(session.canClaimDraw()||session.claimableDrawMoves().length>0);
   $('claim-draw').disabled=!canClaimDraw;
@@ -645,7 +670,9 @@ function exportStudyBackup(){
   toast('完整研究備份已下載（含變例、標記和註解）。','success');
 }
 function exportPgn(){
-  const file=new Blob([session.pgn()+'\n'],{type:'application/x-chess-pgn;charset=utf-8'}),url=URL.createObjectURL(file);
+  // Include the currently edited branch in a complete research PGN export.
+  if(variation&&!persistVariationDraft())return;
+  const file=new Blob([session.pgnWithVariations()+'\n'],{type:'application/x-chess-pgn;charset=utf-8'}),url=URL.createObjectURL(file);
   const link=document.createElement('a');link.href=url;link.download=`Chess-Atelier-${new Date().toISOString().slice(0,10)}.pgn`;link.click();
   setTimeout(()=>URL.revokeObjectURL(url),2000);toast('PGN 棋譜已匯出。');
 }
@@ -725,6 +752,7 @@ function renderStudy(){
   const textarea=$('position-note');if(textarea.dataset.ply!==String(ply)){
     textarea.value=session.study.notes[String(ply)]||'';textarea.dataset.ply=String(ply);
   }
+  $('create-variation').textContent=variation?'從目前分支建立子變例':'從此建立變例';
   const strip=$('variation-strip');strip.classList.toggle('hidden',!variation);
   if(variation){$('variation-title').textContent=`第 ${variation.origin} 手之後的變例`;
     const g=new Chess(variation.fen),sans=[];for(const u of variation.moves)sans.push(g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]}).san);
@@ -733,7 +761,8 @@ function renderStudy(){
   session.study.branches.forEach((b,i)=>{
     const item=document.createElement('button');item.className='variation-item';item.type='button';
     const g=new Chess(b.fen),sans=[];for(const u of b.moves)sans.push(g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]}).san);
-    item.textContent=`分支 ${i+1} · 自第 ${b.origin} 手 · ${sans.join(' ').slice(0,80)}`;
+    const parent=b.parentId===null?'主線':`分支 #${b.parentId} 第 ${b.parentPly} 步`;
+    item.textContent=`分支 #${b.id} · ${parent} · ${sans.join(' ').slice(0,80)}`;
     item.onclick=()=>openVariation(i);dest.append(item);
   });
 }
@@ -773,6 +802,18 @@ function bindActions(){
   $('focus-return').onclick=()=>{if(training)exitTraining();else if(variation)finishVariation();};
   $('sound-btn').onclick=()=>{prefs.sound=!prefs.sound;savePrefs(prefs);renderSettings();toast(prefs.sound?'音效已開啟':'音效已關閉','info');};
   $('resign-btn').onclick=doResign;
+  $('offer-draw').onclick=()=>{
+    if(!session.offerDraw()){toast('目前無法提出和棋。','info');return;}
+    save();render();toast('提和已登記：請先完成此手棋，再由對方接受或拒絕。','info');
+  };
+  $('accept-draw').onclick=()=>{
+    if(!session.respondToDrawOffer(true)){render();return;}
+    cancelSearch();render();save();playSound('end',prefs.sound);toast('雙方同意和棋。','success');
+  };
+  $('decline-draw').onclick=()=>{
+    if(!session.respondToDrawOffer(false)){render();return;}
+    render();save();toast('已拒絕提和，對局繼續。','info');
+  };
   $('claim-draw').onclick=()=>{
     if(!session.isHumanTurn())return;
     session.clock.snapshot();
@@ -835,7 +876,10 @@ function bindActions(){
   $('puzzle-filter').onchange=e=>{puzzleFilter=e.target.value;trainingRenderKey=null;renderTraining();};
   $('training-reset').onclick=()=>{if(training){trainingToken++;training.restart();render();}};
   $('training-exit').onclick=()=>exitTraining();
-  $('copy-fen').onclick=()=>copyText(activeGame().fen(),'FEN 局面');$('copy-pgn').onclick=()=>copyText(session.pgn(),'主線 PGN 棋譜');$('export-btn').onclick=exportPgn;
+  $('copy-fen').onclick=()=>copyText(activeGame().fen(),'FEN 局面');$('copy-pgn').onclick=()=>{
+    if(variation&&!persistVariationDraft())return;
+    copyText(session.pgnWithVariations(),'含分支 PGN 棋譜');
+  };$('export-btn').onclick=exportPgn;
   $('download-study').onclick=exportStudyBackup;
   $('import-pgn').onclick=()=>{$('pgn-input').value='';$('import-error').textContent='';openModal('import-modal');};
   $('import-confirm').onclick=importPgn;$('import-cancel').onclick=()=>closeModal('import-modal');

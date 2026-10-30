@@ -2,6 +2,7 @@ import {Chess,DEFAULT_POSITION} from '../../vendor/chess.js';
 import {ChessClock} from './clock.js';
 import {GameHistoryIndex} from './history-index.js';
 import {StudyBook} from '../study/studybook.js';
+import {exportAnnotatedPgn} from '../study/pgn-variation.js';
 import {normalizeAiTimeMode} from './time-management.js';
 export const LEVELS={
   beginner:{label:'入門',detail:'適合初學者',skill:0,movetime:350},
@@ -36,7 +37,7 @@ export function canPossiblyMate(game,color){
   return new Set(bishops.map(p=>('abcdefgh'.indexOf(p.square[0])+Number(p.square[1]))%2)).size>=2;
 }
 const RESULT_KINDS=new Set(['checkmate','stalemate','insufficient','fivefold','seventyfive-move',
-  'timeout','timeout-insufficient','threefold-claim','fifty-move-claim','resign','pgn','draw']);
+  'timeout','timeout-insufficient','threefold-claim','fifty-move-claim','resign','pgn','draw','agreement']);
 function validClockRecord(value){
   return !!value&&typeof value==='object'&&!Array.isArray(value)
     &&!!value.remaining&&typeof value.remaining==='object'&&!Array.isArray(value.remaining)
@@ -50,7 +51,7 @@ export class ChessSession{
   configure(prefs){
     this.config={...prefs,side:prefs.side==='random'?(Math.random()<.5?'w':'b'):prefs.side};
     this.initialFen=DEFAULT_POSITION;this.game=new Chess();this.headers={};this.cursor=0;this.result=null;this.clock=new ChessClock(prefs.time);this.clockSnapshots=[];this.lastMove=null;this.study=new StudyBook();
-    this.historyIndex=new GameHistoryIndex(this.game,this.initialFen);this.viewCache=null;this.boardStatusCache=null;this.variationDraft=null;
+    this.historyIndex=new GameHistoryIndex(this.game,this.initialFen);this.viewCache=null;this.boardStatusCache=null;this.variationDraft=null;this.pendingDrawOffer=null;
   }
   get moves(){this.historyIndex.sync(this.game,this.initialFen);return this.historyIndex.moves;}
   get ply(){this.historyIndex.sync(this.game,this.initialFen);return this.historyIndex.moves.length;}
@@ -69,6 +70,32 @@ export class ChessSession{
   canClaimDraw(){
     return !this.status()&&this.atLatest&&(this.historyIndex.repetitions()>=3||this.game.isDrawByFiftyMoves());
   }
+  /**
+   * FIDE 9.1.2: submit the draw offer while the player is on move. It is
+   * delivered after that player makes a move; the opponent may accept or
+   * reject it, and moving without responding counts as a rejection.
+   */
+  offerDraw(){
+    this.clock.tick();
+    if(this.config.mode!=='local'||!this.atLatest||this.done||this.pendingDrawOffer)return false;
+    this.pendingDrawOffer={from:this.game.turn(),stage:'awaiting-move',atPly:this.ply};
+    return true;
+  }
+  canRespondToDrawOffer(){
+    const offer=this.pendingDrawOffer;
+    return !!offer&&offer.stage==='pending-reply'&&this.atLatest&&!this.done
+      &&offer.from!==this.game.turn()&&this.config.mode==='local';
+  }
+  respondToDrawOffer(accept){
+    this.clock.tick();
+    if(!this.canRespondToDrawOffer())return false;
+    this.pendingDrawOffer=null;
+    if(accept){
+      this.result={winner:null,kind:'agreement'};
+      this.clock.pause();
+    }
+    return true;
+  }
   claimDraw(announcedMove=null){
     // A draw claim cannot retroactively overrule a clock that has just flagged.
     this.clock.tick();
@@ -81,6 +108,7 @@ export class ChessSession{
       if(!this.canClaimDraw())return false;
       this.result={winner:null,kind:this.historyIndex.repetitions()>=3?'threefold-claim':'fifty-move-claim'};
     }
+    this.pendingDrawOffer=null;
     this.clock.pause();
     return true;
   }
@@ -122,8 +150,14 @@ export class ChessSession{
       this.clockSnapshots.push(beforeClock);
       if(this.headers.Result&&this.headers.Result!=='*')this.headers.Result='*';
       this.cursor=this.ply;this.lastMove=result;this.clock.afterMove(result.color,this.game.turn());
+      // The draw offer becomes actionable only AFTER the offering side moves.
+      if(this.pendingDrawOffer){
+        if(this.pendingDrawOffer.stage==='awaiting-move'&&this.pendingDrawOffer.from===result.color)
+          this.pendingDrawOffer.stage='pending-reply';
+        else if(this.pendingDrawOffer.stage==='pending-reply')this.pendingDrawOffer=null;
+      }
       // Checkmate/draw ends the clock immediately; neither side can later flag.
-      if(this.status())this.clock.pause();
+      if(this.status()){this.pendingDrawOffer=null;this.clock.pause();}
       return result;
     }catch{return null;}
   }
@@ -132,7 +166,7 @@ export class ChessSession{
     return Math.max(0,this.ply-take);
   }
   undo(){
-    if(this.ply===0)return 0;this.clock.pause();this.clock.timeout=null;this.result=null;
+    if(this.ply===0)return 0;this.clock.pause();this.clock.timeout=null;this.result=null;this.pendingDrawOffer=null;
     if(this.headers.Result&&this.headers.Result!=='*')this.headers.Result='*';
     const take=this.ply-this.undoTargetPly();
     let undone=0,restoreClock=null;
@@ -160,6 +194,7 @@ export class ChessSession{
     if(outcome)temp.header('Result',outcome.winner==='w'?'1-0':outcome.winner==='b'?'0-1':'1/2-1/2');
     return temp.pgn({maxWidth:72});
   }
+  pgnWithVariations(){return exportAnnotatedPgn(this);}
   importPgn(text){
     const loaded=new Chess();loaded.loadPgn(text,{strict:false});
     const headers=loaded.getHeaders?.()||{};
@@ -172,9 +207,9 @@ export class ChessSession{
     const commentAt=new Chess(initial);if(loaded.getComments){const commentMap=new Map(loaded.getComments().map(x=>[x.fen,x.comment]));if(commentMap.has(commentAt.fen()))this.study.setNote(0,commentMap.get(commentAt.fen()));for(const [i,san] of loaded.history().entries()){commentAt.move(san);if(commentMap.has(commentAt.fen()))this.study.setNote(i+1,commentMap.get(commentAt.fen()));}}
     const result=headers.Result||text.trim().match(/(?:^|\s)(1-0|0-1|1\/2-1\/2)\s*$/)?.[1]||'*';
     this.result=result==='1-0'?{winner:'w',kind:'pgn'}:result==='0-1'?{winner:'b',kind:'pgn'}:result==='1/2-1/2'?{winner:null,kind:'pgn'}:null;
-    this.config.mode='local';this.config.time='none';this.clock=new ChessClock('none');this.clockSnapshots=[];
+    this.config.mode='local';this.config.time='none';this.clock=new ChessClock('none');this.clockSnapshots=[];this.pendingDrawOffer=null;
   }
-  serialize(){return {version:1,config:this.config,initialFen:this.initialFen,headers:this.headers,moves:this.moves.map(m=>m.san),result:this.result,clock:this.clock.snapshot(),clockSnapshots:this.clockSnapshots,study:this.study.serialize()};}
+  serialize(){return {version:1,config:this.config,initialFen:this.initialFen,headers:this.headers,moves:this.moves.map(m=>m.san),result:this.result,pendingDrawOffer:this.status()?null:this.pendingDrawOffer,clock:this.clock.snapshot(),clockSnapshots:this.clockSnapshots,study:this.study.serialize()};}
   restore(saved,{resumeClock=true,accountElapsed=false,strictStudy=false}={}){
     if(!saved||saved.version!==1||!saved.config||typeof saved.config!=='object'||Array.isArray(saved.config)||!Array.isArray(saved.moves)||saved.moves.length>2000)throw Error('Invalid saved game');
     if(!['ai','local'].includes(saved.config.mode)
@@ -206,7 +241,7 @@ export class ChessSession{
       positions=[new Chess(this.initialFen).fen()];const replay=new Chess(this.initialFen);
       for(const san of saved.moves){replay.move(san);positions.push(replay.fen());}
       for(const branch of this.study.branches){
-        if(branch.origin>=positions.length||branch.fen!==positions[branch.origin]){
+        if(branch.origin>=positions.length||(branch.parentId===null&&branch.fen!==positions[branch.origin])){
           throw Error('研究備份的變例起點與主線不一致');
         }
       }
@@ -219,14 +254,17 @@ export class ChessSession{
       if(!draft||typeof draft!=='object'||Array.isArray(draft)
         ||!Number.isInteger(draft.persistedBranchIndex)||draft.persistedBranchIndex< -1
         ||draft.persistedBranchIndex>=this.study.branches.length)throw Error('Invalid variation draft');
-      const validated=this.study.validateBranch(draft.origin,draft.fen,draft.moves);
-      if(strictStudy&&(draft.origin>=positions.length||positions[draft.origin]!==draft.fen))
+      const validated=this.study.validateBranch(draft.origin,draft.fen,draft.moves,{parentId:draft.parentId,parentPly:draft.parentPly});
+      if(strictStudy&&(draft.origin>=positions.length||(validated.parentId===null&&positions[draft.origin]!==draft.fen)))
         throw Error('研究備份的變例草稿起點與主線不一致');
       if(draft.persistedBranchIndex>=0){
         const existing=this.study.branches[draft.persistedBranchIndex];
-        if(existing.origin!==draft.origin||existing.fen!==draft.fen)throw Error('Invalid variation draft branch');
+        if(existing.origin!==draft.origin||existing.fen!==draft.fen
+          ||existing.parentId!==validated.parentId||existing.parentPly!==validated.parentPly)throw Error('Invalid variation draft branch');
       }
-      this.variationDraft={...validated,persistedBranchIndex:draft.persistedBranchIndex};
+      this.variationDraft={origin:validated.origin,fen:validated.fen,moves:validated.moves,
+        ...(validated.parentId===null?{}:{parentId:validated.parentId,parentPly:validated.parentPly}),
+        persistedBranchIndex:draft.persistedBranchIndex};
     }
     if(saved.clock!==undefined&&saved.clock!==null&&!validClockRecord(saved.clock))
       throw Error('Invalid saved clock');
@@ -241,7 +279,7 @@ export class ChessSession{
       if(!result||typeof result!=='object'||Array.isArray(result)
         ||!RESULT_KINDS.has(result.kind)||!Object.hasOwn(result,'winner')
         ||(result.winner!==null&&!['w','b'].includes(result.winner))
-        ||(result.kind==='draw'&&result.winner!==null)
+        ||(['draw','agreement'].includes(result.kind)&&result.winner!==null)
         ||(result.announcedMove!==undefined
           &&(!['threefold-claim','fifty-move-claim'].includes(result.kind)
             ||typeof result.announcedMove!=='string'
@@ -271,6 +309,18 @@ export class ChessSession{
       }
       this.result={winner:result.winner,kind:result.kind,
         ...(result.announcedMove===undefined?{}:{announcedMove:result.announcedMove})};
+    }
+    if(saved.pendingDrawOffer!=null){
+      const offer=saved.pendingDrawOffer;
+      const valid=offer&&typeof offer==='object'&&!Array.isArray(offer)
+        &&['w','b'].includes(offer.from)&&['awaiting-move','pending-reply'].includes(offer.stage)
+        &&Number.isInteger(offer.atPly)&&offer.atPly>=0
+        &&(offer.stage==='awaiting-move'
+          ?offer.atPly===this.ply&&offer.from===this.game.turn()
+          :offer.atPly===this.ply-1&&offer.from!==this.game.turn())
+        &&this.config.mode==='local'&&!this.status();
+      if(!valid)throw Error('Invalid saved draw offer');
+      this.pendingDrawOffer={from:offer.from,stage:offer.stage,atPly:offer.atPly};
     }
     if(this.status())this.clock.pause();
   }

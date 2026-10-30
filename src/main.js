@@ -644,15 +644,17 @@ function importPgn(){
   try{
     const text=$('pgn-input').value.trim();if(!text)throw new Error('請先貼上 PGN 棋譜。');
     const isBackup=text.startsWith('{')&&text.includes('"chess-atelier-study-v1"');
-    let next,importedActiveSide=null;
+    let next,importedActiveSide=null,dataForImport=null;
     if(isBackup){
-      const data=JSON.parse(text);
+      const data=JSON.parse(text);dataForImport=data.game;
       if(data.format!=='chess-atelier-study-v1'||!data.game||typeof data.game.config!=='object')throw Error('研究備份格式無效');
       next=new ChessSession(data.game.config);
       next.restore(data.game,{resumeClock:!menuVisible(),strictStudy:true});
       importedActiveSide=data.game.clock?.active||null;
     }else{next=new ChessSession({...prefs,mode:'local',time:'none'});next.importPgn(text);}
+    const applyImport=()=>{
     cancelSearch();engine?.newGame();exitTraining(false);variation=null;clockBeforeVariation=null;session=next;
+    restoreVariationDraft(dataForImport);
     $('position-note').dataset.ply='';flipped=isBackup&&session.config.mode==='ai'&&session.config.side==='b';
     menuPauseSide=isBackup&&menuVisible()?importedActiveSide:null;
     usingFallback=false;lastHint=null;analysisInfo=null;analysisFen=null;
@@ -660,6 +662,12 @@ function importPgn(){
     prefs={...prefs,...next.config,side:isBackup?next.config.side:prefs.side,mode:next.config.mode,time:next.config.time};
     savePrefs(prefs);renderSettings();closeModal('import-modal');
     sessionActive=true;render();save();toast(`已載入 ${session.ply} 步${isBackup?'研究備份':'棋譜'}。`);closeDrawers();if(menuVisible())closeMainMenu();
+    resumeBotIfNeeded();
+    };
+    if(variation?.moves.length){
+      closeModal('import-modal');
+      showConfirm('匯入將取代變例草稿','目前的研究草稿會被匯入資料取代，請先下載完整研究備份。',applyImport,'確認匯入');
+    }else applyImport();
   }catch(e){$('import-error').textContent=`匯入失敗：${e.message||'PGN 格式不正確'}`;}
 }
 // Only a viewport breakpoint may change the permanent HUD's placement.

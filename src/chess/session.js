@@ -262,7 +262,9 @@ export class ChessSession{
         if(existing.origin!==draft.origin||existing.fen!==draft.fen
           ||existing.parentId!==validated.parentId||existing.parentPly!==validated.parentPly)throw Error('Invalid variation draft branch');
       }
-      this.variationDraft={...validated,persistedBranchIndex:draft.persistedBranchIndex};
+      this.variationDraft={origin:validated.origin,fen:validated.fen,moves:validated.moves,
+        ...(validated.parentId===null?{}:{parentId:validated.parentId,parentPly:validated.parentPly}),
+        persistedBranchIndex:draft.persistedBranchIndex};
     }
     if(saved.clock!==undefined&&saved.clock!==null&&!validClockRecord(saved.clock))
       throw Error('Invalid saved clock');

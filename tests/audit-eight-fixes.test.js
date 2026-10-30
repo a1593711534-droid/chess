@@ -122,14 +122,14 @@ test('a timed-out second isready releases the search before the search watchdog 
 test('UI includes draft snapshots, restore-and-resume paths and cached board last move',()=>{
   const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
   const board=readFileSync(new URL('../src/ui/board.js',import.meta.url),'utf8');
-  assert.match(main,/data\\.variationDraft=/);
-  assert.match(main,/restoreVariationDraft\\(manual\\.game\\)/);
-  assert.match(main,/restoreVariationDraft\\(saved\\)/);
-  assert.match(main,/restoreVariationDraft\\(dataForImport\\)/);
-  assert.match(main,/if\\(variation&&!parkVariation\\(\\)\\)return/);
-  assert.match(main,/if\\(engineLoadingClockSide&&!training&&!variation/);
-  assert.match(main,/session\\.clock\\.tick\\(\\);\\s*if\\(session\\.done\\)/);
-  assert.match(main,/if\\(menuVisible\\(\\)\\)closeMainMenu\\(\\);\\s*resumeBotIfNeeded\\(\\)/);
-  assert.match(main,/board\\.update\\(current,\\{[^}]*lastMove/);
-  assert.doesNotMatch(board,/view\\.history\\(\\{verbose:true\\}\\)/);
+  assert.match(main,/data\.variationDraft=/);
+  assert.match(main,/restoreVariationDraft\(manual\.game\)/);
+  assert.match(main,/restoreVariationDraft\(saved\)/);
+  assert.match(main,/restoreVariationDraft\(dataForImport\)/);
+  assert.match(main,/if\(variation&&!parkVariation\(\)\)return/);
+  assert.match(main,/if\(engineLoadingClockSide&&!training&&!variation/);
+  assert.match(main,/session\.clock\.tick\(\);\s*if\(session\.done\)/);
+  assert.match(main,/if\(menuVisible\(\)\)closeMainMenu\(\);\s*resumeBotIfNeeded\(\)/);
+  assert.match(main,/board\.update\(current,\{[^}]*lastMove/);
+  assert.doesNotMatch(board,/view\.history\(\{verbose:true\}\)/);
 });

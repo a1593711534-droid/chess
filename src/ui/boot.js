@@ -14,7 +14,7 @@ export const REQUIRED_IDS=[
   'top-player-strip','bottom-player-strip',
   'focus-open-study','focus-open-analysis','focus-hint','focus-annotate','menu-start-shortcut',
   'openings-tab','training-tab','active-match-detail','active-match-summary','ai-time-mode','ai-time-mode-section','ai-time-note','ai-think-label','ai-think-section','ai-think-select','analysis-state',
-  'analysis-time','analyze-btn','arena-type','chessboard','close-records',
+  'analysis-time','review-time','review-game','game-review-results','analyze-btn','arena-type','chessboard','close-records',
   'confirm-cancel','confirm-modal','confirm-text','confirm-title','confirm-yes',
   'copy-fen','copy-pgn','create-variation','engine-dot','engine-status',
   'eval-depth','eval-fill','eval-score','export-btn','export-variation',

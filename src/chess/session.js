@@ -196,6 +196,7 @@ export class ChessSession{
     if(saved.clock!==undefined&&saved.clock!==null&&!validClockRecord(saved.clock))
       throw Error('Invalid saved clock');
     if(strictStudy&&saved.clock){
+      if(!this.clock.enabled&&(saved.clock.active!=null||saved.clock.timeout!=null))throw Error('Invalid saved clock');
       if(saved.clock.active!=null&&saved.clock.active!==this.game.turn())throw Error('Invalid saved clock turn');
       if(saved.clock.timeout!=null&&saved.clock.timeout!==this.game.turn())throw Error('Invalid saved clock timeout');
     }
@@ -211,7 +212,9 @@ export class ChessSession{
         const derived=new Set(['checkmate','stalemate','insufficient','fivefold','seventyfive-move','timeout','timeout-insufficient']);
         if(derived.has(result.kind)&&(!inferred||inferred.kind!==result.kind||inferred.winner!==result.winner))
           throw Error('Invalid saved result for position');
-        if(!derived.has(result.kind)&&inferred)throw Error('Invalid saved result: game already finished');
+        if(!derived.has(result.kind)&&inferred
+          &&!(result.kind==='pgn'&&inferred.winner===result.winner&&inferred.kind!=='timeout'&&inferred.kind!=='timeout-insufficient'))
+          throw Error('Invalid saved result: game already finished');
         if(result.kind==='resign'&&(this.ply===0||result.winner!==(this.config.mode==='ai'
           ?(this.config.side==='w'?'b':'w'):(this.game.turn()==='w'?'b':'w'))))
           throw Error('Invalid saved resignation');

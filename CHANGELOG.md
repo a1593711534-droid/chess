@@ -1,3 +1,10 @@
+## 2.3.7 — Professional integrity and FIDE announced draw claims
+
+- Require confirmation before destructive PGN or study backup import.
+- Strictly validate complete timed-clock backups and persist variation undo immediately.
+- Support FIDE 9.2.1 / 9.3.1 announced-move draw claims, including result recovery.
+- Expand Node regression tests; bump versioned service-worker shell cache.
+
 ## v2.3.6 — Phase 3: history-index performance, UI refactor and real engine CI
 
 - Cache verbose chess history, repeated position counts, historic views and automatic adjudication; incrementally update on move/undo and invalidate on replaced game state.

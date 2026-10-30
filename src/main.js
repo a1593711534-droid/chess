@@ -391,6 +391,7 @@ function makeMove(input,computer=false){
 async function runBot(){
   if(!sessionActive||menuVisible()||training||variation||thinking||session.done||session.config.mode!=='ai'||session.isHumanTurn()||!session.atLatest)return;
   const token=++botSequence,fen=session.game.fen(),setting=resolveLevel(session.config.level);
+  const position={initialFen:session.initialFen,moves:session.moves.map(moveToUci)};
   const budget=selectAiSearch(session.config,session.clock);
   if(!budget){
     const outcome=session.status();
@@ -412,7 +413,7 @@ async function runBot(){
         session.clock.resume(engineLoadingClockSide);
       engineLoadingClockSide=null;
     }
-    uci=await botEngine.search(fen,{skill:setting.skill,
+    uci=await botEngine.search(fen,{skill:setting.skill,position,
       getSearchOptions:()=>selectAiSearch(session.config,session.clock),onInfo:info=>{
       if(botSequence!==token||session.game.fen()!==fen)return;
       analysisInfo=info;analysisFen=fen;analysisLines.set(info.multiPV||1,info);renderAnalysis();
@@ -472,7 +473,11 @@ function render(){
   const current=activeGame();
   const isPlayable=training?(!training.solved&&!training.pendingReply):variation?true:session.atLatest&&!session.done&&!thinking&&session.isHumanTurn();
   if((training||variation)&&mobileAnnotating){mobileAnnotating=false;board.setAnnotationMode(false);$('mobile-annotate-btn').setAttribute('aria-pressed','false');$('mobile-annotate-btn').textContent='標記';}
-  board.update(current,{flipped,disabled:!isPlayable,lastHint,annotations:training||variation?[]:(session.study.marks[String(session.cursor)]||[])});
+  const lastUci=training?training.exercise.line[training.index-1]:variation?.moves.at(-1);
+  const lastMove=training||variation
+    ?(lastUci?{from:lastUci.slice(0,2),to:lastUci.slice(2,4)}:null)
+    :(session.moves[session.cursor-1]||null);
+  board.update(current,{flipped,disabled:!isPlayable,lastHint,lastMove,annotations:training||variation?[]:(session.study.marks[String(session.cursor)]||[])});
   $('active-match-summary').textContent=session.config.mode==='ai'?`人機對弈 · ${resolveLevel(session.config.level).label}`:'雙人本機對弈';
   $('active-match-detail').textContent=session.config.mode==='ai'?`${describeAiTime(session.config,session.clock)} · 雙方棋鐘 ${session.config.time==='none'?'不限時':session.config.time} · ${session.config.side==='w'?'執白':'執黑'}`:`雙方棋鐘 ${session.config.time==='none'?'不限時':session.config.time}`;
   const display=statusDisplay();$('status-overline').textContent=`ROUND ${String(Math.floor(session.ply/2)+1).padStart(2,'0')} · ${session.done?'FINISHED':thinking?'THINKING':'IN PROGRESS'}`;
@@ -551,6 +556,9 @@ async function analyze(hint=false){
   }
   if(thinking){toast('請先等電腦完成著法。','info');return;}
   cancelSearch();const token=++analysisSequence,fen=activeGame().fen();
+  const position=training?null:{initialFen:session.initialFen,
+    moves:[...session.moves.slice(0,variation?variation.origin:session.cursor).map(moveToUci),
+      ...(variation?.moves||[])]};
   analysisLines=new Map();analysisInfo=null;analysisFen=fen;
   analysisRunning=true;$('stop-analysis').disabled=false;
   lastHint=null;
@@ -558,7 +566,7 @@ async function analyze(hint=false){
   if(!hint)openRightPanel('analysis');
   let best=null,latest=null;
   try{
-    best=await ensureEngine().search(fen,{movetime:hint?850:Number($('analysis-time').value),multiPV:hint?1:Number($('multi-pv').value),skill:20,onInfo:info=>{
+    best=await ensureEngine().search(fen,{position,movetime:hint?850:Number($('analysis-time').value),multiPV:hint?1:Number($('multi-pv').value),skill:20,onInfo:info=>{
       if(token!==analysisSequence)return;
       analysisLines.set(info.multiPV||1,info);
       latest=analysisLines.get(1)||info;analysisInfo=latest;analysisFen=fen;renderAnalysis();
@@ -597,6 +605,8 @@ function toggleMobileAnnotation(){
 function doResign(){
   if(training||variation||session.done||session.ply===0)return;
   showConfirm('確定認輸？','認輸後將結束本局，但棋譜仍可匯出保存。',()=>{
+    session.clock.tick();
+    if(session.done){render();save();toast('對局已結束，無法再認輸。','info');return;}
     cancelSearch();const loser=session.config.mode==='ai'?session.config.side:session.game.turn();
     session.result={winner:loser==='w'?'b':'w',kind:'resign'};session.clock.pause();render();save();playSound('end',prefs.sound);toast(gameOutcomeText(session.result));
   },'確認認輸');
@@ -830,6 +840,7 @@ function startApplication(){
     // Parse the entire save into a temporary session before replacing live state.
     const next=new ChessSession(saved.config);next.restore(saved,{resumeClock:false,strictStudy:true});
     session=next;sessionActive=true;
+    restoreVariationDraft(saved);
     menuPauseSide=saved.clock?.active||null;
     prefs={...prefs,...saved.config,side:prefs.side==='random'?'random':saved.config.side};flipped=session.config.mode==='ai'&&session.config.side==='b';
   }catch{invalidSave=true;}}

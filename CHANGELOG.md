@@ -1,3 +1,11 @@
+## 2.3.8 — FIDE draw agreement and nested study variations
+
+- Add draw-offer, acceptance, refusal and move-based refusal for local two-player games.
+- Persist and validate pending draw offers in full and automatic study backups.
+- Add stable child-parent branch references and strict FEN ancestry checks.
+- Export recursively annotated PGN with nested variation lines and mainline comments; study JSON remains the exact editable import format.
+- Expand unit/browser regressions and rotate the offline service-worker cache.
+
 ## 2.3.7 — Professional integrity and FIDE announced draw claims
 
 - Require confirmation before destructive PGN or study backup import.

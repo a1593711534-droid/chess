@@ -124,3 +124,20 @@ test('new PGN/analysis modules are included in offline shell and UI wiring',()=>
   assert.match(app,/analyzeFullGame\(subject,ensureEngine\(\)/);
   assert.match(app,/review-game/);
 });
+
+test('undo cleans NAGs and requires confirmation when only NAGs would be lost',()=>{
+  const s=make();s.play('e4');s.play('e5');
+  s.study.nags['1']=[1];s.study.nags['2']=[2];
+  assert.equal(s.study.hasResearchAfter(1),true);
+  s.undo();
+  assert.deepEqual(s.study.nags,{'1':[1]});
+});
+test('editing a parent variation cannot silently invalidate descendant anchor FEN',()=>{
+  const s=make();s.play('e4');
+  const root=s.study.addBranch(1,s.game.fen(),['c7c5','g1f3']);
+  const childFen=new Chess(s.game.fen());childFen.move('c5');
+  s.study.addBranch(1,childFen.fen(),['d2d4'],{parentId:root.id,parentPly:1});
+  assert.throws(()=>s.study.upsertBranch(1,root.fen,['e7e5','g1f3'],root),/子變例/);
+  assert.deepEqual(root.moves,['c7c5','g1f3']);
+  assert.doesNotThrow(()=>make().restore(s.serialize(),{strictStudy:true}));
+});

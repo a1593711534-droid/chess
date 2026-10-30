@@ -6,11 +6,12 @@ import {Chess} from '../../vendor/chess.js';
 export function exportAnnotatedPgn(session){
   const original=session.pgn();
   const gap=original.indexOf('\n\n');
-  const headers=gap>=0?original.slice(0,gap):'';
+  let headers=gap>=0?original.slice(0,gap):'';
   const result=session.status();
   const resultToken=result
     ?result.winner==='w'?'1-0':result.winner==='b'?'0-1':'1/2-1/2'
     :'*';
+  if(!/^\[Result /m.test(headers))headers+=(headers?'\n':'')+'[Result "'+resultToken+'"]';
   const roots=new Map(),children=new Map();
   const grouped=(map,key,branch)=>{
     if(!map.has(key))map.set(key,[]);

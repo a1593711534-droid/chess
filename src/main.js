@@ -1,6 +1,7 @@
 import {Chess} from '../vendor/chess.js';
 import {ChessSession,LEVELS,resolveLevel} from './chess/session.js';
 import {EngineClient} from './chess/engine.js';
+import {analyzeFullGame} from './chess/game-review.js';
 import {selectAiSearch,describeAiTime,normalizeAiTimeMode} from './chess/time-management.js';
 import {moveToUci,pvToSan,scoreWhite} from './chess/notation.js';
 import {fallbackMove} from './chess/fallback.js';
@@ -25,6 +26,7 @@ let thinking=false;
 let botSequence=0,analysisSequence=0;
 let lastHint=null,analysisInfo=null,analysisFen=null;
 let analysisLines=new Map(),analysisRunning=false;
+let reviewRecord=null,reviewRunning=false;
 let training=null,variation=null,trainingToken=0,clockBeforeTraining=null,clockBeforeVariation=null;
 let openingFilter='all',puzzleFilter='全部';
 let promotion=null,confirmCallback=null;
@@ -245,6 +247,8 @@ function cancelSearch({preserveAnalysis=false}={}){
     engineLoadingClockSide=null;
   }
   botSequence++;analysisSequence++;engine?.cancel();thinking=false;analysisRunning=false;
+  if(reviewRunning&&reviewRecord)reviewRecord.status='stopped';
+  reviewRunning=false;
   if(!preserveAnalysis){analysisInfo=null;analysisFen=null;analysisLines=new Map();}
   const b=$('stop-analysis');if(b)b.disabled=true;
   if(board&&$('analysis-state'))renderAnalysis();
@@ -550,6 +554,7 @@ function renderMoves(){
   renderStudy();renderNotationView(session);
 }
 function renderAnalysis(){
+  renderGameReview();
   const target=$('analysis-state');
   if(analysisRunning){target.textContent='分析中…';}else if(thinking){target.textContent='正在計算';}
   else if(analysisInfo&&analysisFen===activeGame().fen())target.textContent='最新結果';
@@ -574,6 +579,63 @@ function renderAnalysis(){
     const depth=document.createElement('small');depth.textContent=`D${item.depth||'—'}`;title.append(num,score,depth);
     const line=document.createElement('div');line.className='pv-san';line.textContent=pvToSan(analysisFen,item.pv);
     row.append(title,line);dest.append(row);
+  }
+}
+function renderGameReview(){
+  const area=$('game-review-results');
+  if(!area)return;
+  area.replaceChildren();
+  $('review-game').disabled=!sessionActive||!session.ply||!!training||!!variation||reviewRunning;
+  const report=reviewRecord;
+  if(!report||report.session!==session||report.revision!==session.historyIndex.revision){
+    area.textContent='逐步分析會在本機執行，結果不會寫入棋局，也不會上傳。';return;
+  }
+  const title=document.createElement('p');
+  const status={running:'分析中',finished:'已完成',stopped:'已中止',error:'分析失敗'}[report.status]||'未知';
+  title.textContent=`${status} · ${report.done}/${report.total} 步 · 每個局面 ${report.movetime} 毫秒`;
+  area.append(title);
+  const note=document.createElement('p');note.className='review-disclaimer';
+  note.textContent='失誤等級依固定時間搜尋的估計兵值損失分類，不等同官方準確率，將死局面與無分數局面標為未判定。';
+  area.append(note);
+  if(report.error){const err=document.createElement('p');err.textContent=report.error;area.append(err);}
+  const rows=document.createElement('div');rows.className='review-moves';
+  for(const record of report.rows){
+    const button=document.createElement('button');button.className='micro-button review-move';button.type='button';
+    button.textContent=`#${record.ply} ${record.san} · ${record.label}${record.loss===null?'':` (約 -${(record.loss/100).toFixed(2)} 兵)`}`;
+    button.title='跳至第 '+record.ply+' 半回合';button.onclick=()=>goToPly(record.ply);
+    rows.append(button);
+  }
+  area.append(rows);
+}
+async function reviewFullGame(){
+  if(!sessionActive||!session.ply||training||variation||reviewRunning)return;
+  if(!session.done&&(session.clock.enabled||session.config.mode==='ai')){
+    toast('為避免干擾正式對局，請在計時或人機對局結束後執行整局分析。','info');return;
+  }
+  if(thinking){toast('引擎正在走棋，請在對局完成後重試。','info');return;}
+  cancelSearch();
+  const token=++analysisSequence,subject=session,revision=subject.historyIndex.revision;
+  const movetime=Number($('review-time').value);
+  reviewRecord={session:subject,revision,movetime,status:'running',
+    done:0,total:subject.ply,rows:[],error:null};
+  reviewRunning=true;$('stop-analysis').disabled=false;
+  renderGameReview();openRightPanel('analysis');
+  try{
+    await analyzeFullGame(subject,ensureEngine(),{
+      movetime,isCancelled:()=>token!==analysisSequence,
+      onProgress:progress=>{
+        if(token!==analysisSequence)return;
+        Object.assign(reviewRecord,progress);
+        renderGameReview();
+      },
+    });
+    if(token===analysisSequence)reviewRecord.status='finished';
+  }catch(error){
+    if(token===analysisSequence){reviewRecord.status='error';reviewRecord.error=error.message||String(error);toast('整局分析無法完成，已保留已取得的結果。','error');}
+  }finally{
+    if(token===analysisSequence){
+      reviewRunning=false;$('stop-analysis').disabled=true;renderGameReview();
+    }
   }
 }
 async function analyze(hint=false){
@@ -698,7 +760,7 @@ function importPgn(){
     if(mobileAnnotating){mobileAnnotating=false;board.setAnnotationMode(false);$('mobile-annotate-btn').setAttribute('aria-pressed','false');$('mobile-annotate-btn').textContent='標記';}
     prefs={...prefs,...next.config,side:isBackup?next.config.side:prefs.side,mode:next.config.mode,time:next.config.time};
     savePrefs(prefs);renderSettings();closeModal('import-modal');
-    sessionActive=true;render();save();toast(`已載入 ${session.ply} 步${isBackup?'研究備份':'棋譜'}。`);closeDrawers();if(menuVisible())closeMainMenu();
+    sessionActive=true;render();save();toast(`已載入 ${session.ply} 步${isBackup?'研究備份':'棋譜'}，含 ${session.study.branches.length} 個研究變例。`);closeDrawers();if(menuVisible())closeMainMenu();
     resumeBotIfNeeded();
     };
     // Import must never silently replace a live game, finished game or study.
@@ -862,7 +924,8 @@ function bindActions(){
     };
   });
   $('analyze-btn').onclick=()=>analyze(false);$('hint-btn').onclick=()=>analyze(true);
-  $('stop-analysis').onclick=()=>{cancelSearch({preserveAnalysis:true});toast('已停止計算，保留目前取得的分析結果。','info');};
+  $('review-game').onclick=reviewFullGame;
+  $('stop-analysis').onclick=()=>{cancelSearch({preserveAnalysis:true});renderGameReview();toast('已停止計算，保留目前取得的分析結果。','info');};
   $('position-note').addEventListener('input',()=>{
     const ply=Number($('position-note').dataset.ply);
     if(!Number.isInteger(ply))return;

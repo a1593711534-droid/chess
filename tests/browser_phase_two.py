@@ -54,6 +54,11 @@ try:
     assert not errors,errors
     print('FIDE DRAW OFFER/ACCEPT/DECLINE BROWSER OK',flush=True)
 
+    ctx.close()
+    ctx=browser.new_context(viewport={'width':1440,'height':900},accept_downloads=True)
+    page=ctx.new_page()
+    errors=[]
+    page.on('pageerror',lambda e:errors.append(str(e)))
     new_game()
     page.locator('#create-variation').click()
     move('e2','e4')
